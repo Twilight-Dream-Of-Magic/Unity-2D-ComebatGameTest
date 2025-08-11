@@ -18,9 +18,14 @@ namespace Combat {
             if (hb == null) return;
             if (hb.owner == null || hb.owner == owner) return;
             if (!hb.enabledThisFrame) return;
+            if (!owner.CanHitTarget(hb.owner)) return;
 
             DamageInfo info = BuildEffectiveDamageInfo();
             hb.owner.TakeHit(info, owner);
+            // spawn colored hit effect at contact point
+            var pos = other.bounds.ClosestPoint(transform.position);
+            bool isPlayerHit = hb.owner.team == Fighter.FighterTeam.Player;
+            Systems.HitEffectManager.Instance?.SpawnHit(pos, isPlayerHit);
         }
 
         DamageInfo BuildEffectiveDamageInfo() {

@@ -19,6 +19,8 @@ namespace Data {
         public int damage = 8;
         public int meterOnHit = 50;
         public int meterOnBlock = 20;
+        public int meterCost = 0; // cost to use this move
+        public int healAmount = 0; // heal on use (applied on trigger)
 
         [Header("Knockback & Pushback")]
         public Vector2 knockback = new Vector2(2f, 2f);

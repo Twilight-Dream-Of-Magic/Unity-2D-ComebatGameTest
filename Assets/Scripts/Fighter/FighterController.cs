@@ -4,8 +4,12 @@ using Fighter.FSM;
 using Fighter.States;
 using Data;
 using Systems;
+using System;
+using System.Collections.Generic;
 
 namespace Fighter {
+    public enum FighterTeam { Player, AI }
+
     public struct FighterCommands {
         public float moveX;
         public bool jump, crouch, light, heavy, block, dodge;
@@ -22,11 +26,14 @@ namespace Fighter {
         public CapsuleCollider2D bodyCollider;
         public Hurtbox[] hurtboxes;
         public Hitbox[] hitboxes;
+        public FighterTeam team = FighterTeam.Player;
 
-        [Header("Audio")]
-        public AudioClip sfxSwing;
-        public AudioClip sfxHit;
-        public AudioClip sfxBlock;
+        // Damage events
+        public event Action<FighterController> OnDamaged; // invoked on victim when real damage dealt
+        public static event Action<FighterController, FighterController> OnAnyDamage; // (victim, attacker)
+
+        [Header("Physics")]
+        public LayerMask groundMask = ~0; // default: everything
 
         [Header("Runtime")]
         public int currentHealth;
@@ -58,16 +65,29 @@ namespace Fighter {
         string pendingCancelTrigger;
         bool hasPendingCancel;
 
-        // Local freeze
         int freezeUntilFrame;
         Vector2 cachedVelocity;
         float externalImpulseX;
 
+        public bool debugHitActive { get; private set; }
+        public string debugMoveName { get; private set; }
+        SpriteRenderer srVisual; Color srDefaultColor; bool srHasVisual;
+
+        // per-attack gating
+        int attackInstanceId;
+        readonly HashSet<FighterController> hitVictims = new HashSet<FighterController>();
+        bool hitStopApplied;
+
         private void Awake() {
             rb = GetComponent<Rigidbody2D>();
-            if (animator == null) animator = GetComponent<Animator>();
+            animator = GetComponent<Animator>();
+            if (animator == null) animator = gameObject.AddComponent<Animator>();
+            if (bodyCollider == null) bodyCollider = GetComponent<CapsuleCollider2D>();
             currentHealth = stats != null ? stats.maxHealth : 100;
             rb.gravityScale = stats != null ? stats.gravityScale : 4f;
+
+            srVisual = GetComponentInChildren<SpriteRenderer>();
+            if (srVisual != null) { srHasVisual = true; srDefaultColor = srVisual.color; }
 
             if (hurtboxes != null) foreach (var h in hurtboxes) if (h != null) h.owner = this;
             if (hitboxes != null) foreach (var h in hitboxes) if (h != null) h.owner = this;
@@ -85,14 +105,18 @@ namespace Fighter {
             KO = new KnockdownState(this);
         }
 
+        private bool AnimatorReady() {
+            return animator != null && animator.runtimeAnimatorController != null;
+        }
+
         private void Start() { StateMachine.SetState(Idle); }
 
         private void Update() {
             ApplyFreezeVisual();
             AutoFaceOpponent();
             UpdateHurtboxEnable();
-            if (!IsFrozen()) StateMachine.Tick();
-            if (animator != null) {
+            if (!IsFrozen() && StateMachine != null) StateMachine.Tick();
+            if (AnimatorReady()) {
                 animator.SetFloat("SpeedX", Mathf.Abs(rb.velocity.x));
                 animator.SetBool("Grounded", IsGrounded());
                 animator.SetBool("Crouch", IsCrouching);
@@ -134,15 +158,35 @@ namespace Fighter {
         }
         public void HaltHorizontal() { rb.velocity = new Vector2(0, rb.velocity.y); }
         public void AirMove(float x) { rb.velocity = new Vector2(x * (stats != null ? stats.walkSpeed : 6f), rb.velocity.y); }
-        public void Jump() { rb.velocity = new Vector2(rb.velocity.x, stats != null ? stats.jumpForce : 12f); animator?.SetTrigger("Jump"); }
+        public void Jump() { rb.velocity = new Vector2(rb.velocity.x, stats != null ? stats.jumpForce : 12f); if (AnimatorReady()) animator.SetTrigger("Jump"); }
 
         public void TriggerAttack(string trigger) {
+            debugMoveName = trigger;
             if (moveSet != null) CurrentMove = moveSet.Get(trigger);
-            animator?.SetTrigger(trigger);
-            if (sfxSwing) AudioManager.Instance?.PlaySFX(sfxSwing);
+            // meter gate
+            if (CurrentMove != null && CurrentMove.meterCost > 0) {
+                if (!ConsumeMeter(CurrentMove.meterCost)) { CurrentMove = null; return; }
+            }
+            // apply heal-on-use
+            if (CurrentMove != null && CurrentMove.healAmount > 0) {
+                AddHealth(CurrentMove.healAmount);
+            }
+            if (AnimatorReady()) animator.SetTrigger(trigger);
         }
-        public void ClearCurrentMove() { CurrentMove = null; }
-        public void SetAttackActive(bool on) { if (hitboxes == null) return; foreach (var h in hitboxes) if (h != null) h.SetActive(on); }
+        public void ClearCurrentMove() { CurrentMove = null; debugMoveName = null; }
+        public void SetAttackActive(bool on) {
+            debugHitActive = on;
+            if (on) { attackInstanceId++; hitVictims.Clear(); hitStopApplied = false; }
+            if (hitboxes == null) return;
+            foreach (var h in hitboxes) if (h != null) h.SetActive(on);
+            if (srHasVisual) srVisual.color = on ? Color.yellow : srDefaultColor;
+        }
+
+        public bool CanHitTarget(FighterController target) {
+            if (target == null) return false;
+            if (hitVictims.Contains(target)) return false;
+            hitVictims.Add(target); return true;
+        }
 
         public void RequestComboCancel(string trigger) { pendingCancelTrigger = trigger; hasPendingCancel = true; }
         public bool TryConsumeComboCancel(out string trigger) { trigger = null; if (!hasPendingCancel) return false; hasPendingCancel = false; trigger = pendingCancelTrigger; return true; }
@@ -151,6 +195,7 @@ namespace Fighter {
 
         public void AddMeter(int value) { meter = Mathf.Clamp(meter + value, 0, maxMeter); }
         public bool ConsumeMeter(int value) { if (meter < value) return false; meter -= value; return true; }
+        public void AddHealth(int value) { int maxHp = stats != null ? stats.maxHealth : 100; currentHealth = Mathf.Clamp(currentHealth + value, 0, maxHp); }
 
         public bool CanBlock(DamageInfo info) {
             return GuardEvaluator.CanBlock(PendingCommands.block, IsGrounded(), IsCrouching, info.level);
@@ -175,37 +220,56 @@ namespace Fighter {
 
             var res = HitResolver.Resolve(info, CanBlock(info), stats != null ? stats.blockDamageRatio : 0.2f);
             int maxHp = stats != null ? stats.maxHealth : 100;
+            int before = currentHealth;
             currentHealth = Mathf.Clamp(currentHealth - res.finalDamage, 0, maxHp);
 
-            if (currentHealth == 0) { StateMachine.SetState(KO); animator?.SetTrigger("KO"); return; }
+            if (currentHealth == 0) { StateMachine.SetState(KO); if (AnimatorReady()) animator.SetTrigger("KO"); return; }
 
             float dir = Mathf.Sign(transform.position.x - attacker.transform.position.x);
             if (!res.wasBlocked) {
                 rb.velocity = new Vector2(dir * info.knockback.x, info.knockback.y);
-                animator?.SetTrigger("Hit");
+                if (AnimatorReady()) animator.SetTrigger("Hit");
                 Hitstun.Begin(res.appliedStun);
                 StateMachine.SetState(Hitstun);
 
                 attacker.OnHitConfirmedLocal(res.appliedHitstop);
                 attacker.AddMeter(attacker.CurrentMove ? attacker.CurrentMove.meterOnHit : 20);
                 attacker.externalImpulseX += -dir * res.appliedPushback;
-                if (attacker.sfxHit) AudioManager.Instance?.PlaySFX(attacker.sfxHit);
+
+                if (currentHealth < before) { OnDamaged?.Invoke(this); OnAnyDamage?.Invoke(this, attacker); }
             } else {
-                animator?.SetTrigger("BlockHit");
+                if (AnimatorReady()) animator.SetTrigger("BlockHit");
                 Hitstun.Begin(res.appliedStun);
                 StateMachine.SetState(Hitstun);
 
                 attacker.OnHitConfirmedLocal(res.appliedHitstop);
                 attacker.AddMeter(attacker.CurrentMove ? attacker.CurrentMove.meterOnBlock : 10);
                 attacker.externalImpulseX += -dir * res.appliedPushback;
-                if (attacker.sfxBlock) AudioManager.Instance?.PlaySFX(attacker.sfxBlock);
             }
         }
 
         public void OnHitConfirmedLocal(float seconds) {
+            if (hitStopApplied) return;
+            hitStopApplied = true;
             int frames = FrameClock.SecondsToFrames(seconds);
             FreezeFrames(frames);
             Systems.CameraShaker.Instance?.Shake(0.1f, seconds);
+        }
+
+        public void StartDodge() {
+            if (AnimatorReady()) animator.SetTrigger("Dodge");
+            float dir = facingRight ? 1f : -1f;
+            rb.velocity = new Vector2(dir * (stats != null ? stats.walkSpeed * 1.5f : 9f), rb.velocity.y);
+            float inv = stats != null ? stats.dodgeInvuln : 0.2f;
+            StartCoroutine(DodgeInvuln(inv));
+        }
+
+        System.Collections.IEnumerator DodgeInvuln(float seconds) {
+            SetUpperBodyInvuln(true); SetLowerBodyInvuln(true);
+            int frames = FrameClock.SecondsToFrames(seconds);
+            int until = FrameClock.Now + frames;
+            while (FrameClock.Now < until) { yield return new WaitForFixedUpdate(); }
+            SetUpperBodyInvuln(false); SetLowerBodyInvuln(false);
         }
 
         void AutoFaceOpponent() {
@@ -215,10 +279,13 @@ namespace Fighter {
         }
 
         public bool IsGrounded() {
-            var hits = Physics2D.Raycast(transform.position + Vector3.down * 0.1f, Vector2.down, 0.2f, LayerMask.GetMask("Ground"));
-            return hits.collider != null;
+            if (bodyCollider == null) return Physics2D.Raycast(transform.position, Vector2.down, 0.2f, groundMask);
+            var b = bodyCollider.bounds;
+            Vector2 boxCenter = new Vector2(b.center.x, b.min.y - 0.05f);
+            Vector2 boxSize = new Vector2(b.size.x * 0.9f, 0.1f);
+            return Physics2D.OverlapBox(boxCenter, boxSize, 0f, groundMask) != null;
         }
 
-        public void SetAnimatorBool(string key, bool v) { if (animator) animator.SetBool(key, v); }
+        public void SetAnimatorBool(string key, bool v) { if (AnimatorReady()) animator.SetBool(key, v); }
     }
 }

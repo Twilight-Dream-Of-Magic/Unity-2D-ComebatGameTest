@@ -14,7 +14,7 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
 - `Assets/` (created after opening Unity)
   - `Scripts/`
     - `Combat/`: Hitbox, Hurtbox, DamageInfo, Health
-    - `Fighter/`: FighterController, PlayerInputBridge, SimpleAIController
+    - `Fighter/`: FighterController, PlayerController, OpponentAIController
     - `Systems/`: RoundManager, GameManager
     - `UI/`: HealthBar bindings
     - `Data/`: ScriptableObjects for fighter stats and moves
@@ -29,20 +29,21 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
    - Add components: `Rigidbody2D`, `CapsuleCollider2D` (body), `Animator`
    - Add child `Hurtbox` (BoxCollider2D set as Trigger) with `Hurtbox.cs`
    - Add child `Hitboxes` empty with several BoxCollider2D children (set Trigger) + `Hitbox.cs`
-   - Attach `FighterController.cs`, `PlayerInputBridge.cs` (for player) or `SimpleAIController.cs` (for AI)
+   - Attach `FighterController.cs`, `PlayerController.cs` (for player) or `OpponentAIController.cs` (for AI)
    - Create `FighterStats` ScriptableObject and assign
+   - Specials: `SpecialMoveSet` defines input sequences using direction/keys (e.g. Down, Forward, Heavy -> Super; Down, Down, Light -> Heal). `CommandQueue` default cleanup 0.25s; sequence matching uses per-entry `maxWindowSeconds` (default 0.6s).
 5) Animator: set Idle/Walk/Jump/Crouch/Block/Light/Heavy/Hit/KO. Add Animation Events to attack clips to toggle hitboxes.
 6) Create `RoundManager` in scene, link both fighters and UI sliders.
 7) Play. Use controls below.
 
 ## Controls (default)
 - Move: A/D or Left/Right
-- Jump: Space or W/Up
+- Jump: Space
 - Crouch: S or DownArrow
 - Light: J
 - Heavy: K
 - Block (hold): Left Shift
-- Dodge: L or Left Ctrl
+- Dodge: L
 
 ## White-box Hitbox/Hurtbox
 - `Hurtbox` = trigger collider on the defender, carries reference to its owner.

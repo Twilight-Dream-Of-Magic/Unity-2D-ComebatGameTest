@@ -5,10 +5,14 @@ using Systems;
 
 namespace UI {
     public class DebugHUD : MonoBehaviour {
-        public Fighter.FighterController fighter;
+        public Fighter.FighterController fighter; // legacy single
+        public Fighter.FighterController fighterP1;
+        public Fighter.FighterController fighterP2;
         public InputBuffer inputBuffer;
         public Text stateText;
         public Text inputText;
+        [Header("Display")]
+        public bool showDetails = false; // compact by default
 
         private void Reset() {
             if (fighter == null) fighter = FindObjectOfType<Fighter.FighterController>();
@@ -16,20 +20,32 @@ namespace UI {
         }
 
         private void Update() {
-            if (fighter && stateText) {
-                var st = fighter.StateMachine?.Current?.Name ?? "None";
-                string moveLine = "";
-                if (fighter.CurrentMove != null) {
-                    // Estimate advantage in frames: hitstun/blockstun - recovery
-                    int advHit = FrameClock.SecondsToFrames(Mathf.Max(0f, fighter.CurrentMove.hitstun - fighter.CurrentMove.recovery));
-                    int advBlk = FrameClock.SecondsToFrames(Mathf.Max(0f, fighter.CurrentMove.blockstun - fighter.CurrentMove.recovery));
-                    // Phase info comes from FighterController public fields (if any), otherwise show durations
-                    moveLine = $"\nMove: {fighter.CurrentMove.moveId} ({fighter.CurrentMove.triggerName})\n  startup:{FrameClock.SecondsToFrames(fighter.CurrentMove.startup)}f active:{FrameClock.SecondsToFrames(fighter.CurrentMove.active)}f rec:{FrameClock.SecondsToFrames(fighter.CurrentMove.recovery)}f\n  adv(Hit):{advHit}f  adv(Block):{advBlk}f";
+            if (!stateText) return;
+            var p1 = fighterP1 != null ? fighterP1 : fighter;
+            var p2 = fighterP2;
+
+            string BuildLine(Fighter.FighterController f) {
+                if (f == null) return "-";
+                var st = f.StateMachine?.Current?.Name ?? "None";
+                if (!showDetails) {
+                    string moveLine = f.CurrentMove != null ? $"{f.CurrentMove.moveId}({f.CurrentMove.triggerName}) A:{f.debugHitActive}" : "";
+                    return $"{(f.team==Fighter.FighterTeam.Player?"P1":"P2")}  {st}  {moveLine}";
+                } else {
+                    string moveLine = "";
+                    if (f.CurrentMove != null) {
+                        int advHit = FrameClock.SecondsToFrames(Mathf.Max(0f, f.CurrentMove.hitstun - f.CurrentMove.recovery));
+                        int advBlk = FrameClock.SecondsToFrames(Mathf.Max(0f, f.CurrentMove.blockstun - f.CurrentMove.recovery));
+                        moveLine = $" | {f.CurrentMove.moveId}({f.CurrentMove.triggerName}) A:{f.debugHitActive} st:{FrameClock.SecondsToFrames(f.CurrentMove.startup)} a:{FrameClock.SecondsToFrames(f.CurrentMove.active)} r:{FrameClock.SecondsToFrames(f.CurrentMove.recovery)} advH:{advHit} advB:{advBlk} HP:{f.currentHealth} M:{f.meter}";
+                    }
+                    return $"{(f.team==Fighter.FighterTeam.Player?"P1":"P2")} {st}{moveLine}";
                 }
-                stateText.text = $"State: {st}{moveLine}\nHP: {fighter.currentHealth}  Meter: {fighter.meter}";
             }
+
+            if (p1 && p2) stateText.text = BuildLine(p1) + "\n" + BuildLine(p2);
+            else if (p1) stateText.text = BuildLine(p1);
+
             if (inputText && inputBuffer) {
-                inputText.text = "Inputs: (last 0.4s)"; // placeholder; can be extended to list tokens
+                inputText.text = "";
             }
         }
     }
