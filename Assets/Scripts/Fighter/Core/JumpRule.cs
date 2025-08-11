@@ -25,7 +25,6 @@ namespace Fighter {
         float timeSinceLastJump;
         float bufferTimer = 999f;
         bool jumpHeld;
-        bool jumpPressedEdge;
 
         float tokens;
         float tokenAccu;
@@ -56,7 +55,7 @@ namespace Fighter {
             timeSinceLastJump += Time.deltaTime;
 
             // detect edge and held
-            if (jumpPressedThisFrame) { jumpPressedEdge = true; jumpHeld = true; bufferTimer = 0f; }
+            if (jumpPressedThisFrame) { jumpHeld = true; bufferTimer = 0f; }
             else { bufferTimer += Time.deltaTime; }
 
             // token bucket refill: tokensPerWindow every tokenWindowSeconds
@@ -94,7 +93,6 @@ namespace Fighter {
             if (!grounded && timeSinceLeftGround > 0f) airJumpsUsed++;
             timeSinceLastJump = 0f;
             bufferTimer = 999f; // clear buffer
-            jumpPressedEdge = false;
             if (tokenCapacity > 0) tokens = Mathf.Max(0, tokens - 1f);
         }
     }

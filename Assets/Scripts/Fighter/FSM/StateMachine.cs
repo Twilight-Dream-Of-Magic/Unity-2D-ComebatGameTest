@@ -6,6 +6,8 @@ namespace Fighter.FSM {
             Current?.Exit();
             Current = next;
             Current?.Enter();
+            // notify owner if available
+            if (Current is Fighter.States.FighterStateBase fsb && fsb != null) fsb.OwnerNotifyStateChanged();
         }
         public void Tick() => Current?.Tick();
     }

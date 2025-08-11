@@ -75,6 +75,8 @@ namespace Dev {
             if (!demoScripted) {
                 var src = fc.gameObject.AddComponent<Fighter.InputSystem.PlayerInputSource>();
                 fc.gameObject.AddComponent<Fighter.InputSystem.InputDriver>();
+                // ensure no AI source on player
+                var ai = fc.GetComponent<Fighter.InputSystem.AIInputSource>(); if (ai) ai.enabled = false;
             } else {
                 var src = fc.gameObject.AddComponent<Fighter.InputSystem.ScriptedInputSource>();
                 fc.gameObject.AddComponent<Fighter.InputSystem.InputDriver>();
@@ -159,8 +161,8 @@ namespace Dev {
             // Hitboxes (larger and further reach to ensure contact)
             var hitRoot = new GameObject("Hitboxes"); hitRoot.transform.SetParent(go.transform, false);
             fc.hitboxes = new Hitbox[2];
-            fc.hitboxes[0] = CreateHitbox(hitRoot.transform, "Light1", new Vector2(1.1f, 0.9f), new Vector2(1.0f, 0.45f));
-            fc.hitboxes[1] = CreateHitbox(hitRoot.transform, "Heavy1", new Vector2(1.4f, 0.9f), new Vector2(1.3f, 0.5f));
+            fc.hitboxes[0] = CreateHitbox(hitRoot.transform, "Light1", new Vector2(1.3f, 1.0f), new Vector2(1.1f, 0.5f));
+            fc.hitboxes[1] = CreateHitbox(hitRoot.transform, "Heavy1", new Vector2(1.6f, 1.0f), new Vector2(1.45f, 0.5f));
             foreach (var hx in fc.hitboxes) { hx.owner = fc; hx.active = false; }
 
             return fc;

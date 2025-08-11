@@ -2,21 +2,19 @@ using UnityEngine;
 using UnityEngine.UI;
 
 namespace UI {
-    /// <summary>
-    /// Displays the current combo count (>=2) in the center HUD, colored by attacker team.
-    /// Reads from the singleton ComboCounter produced during hits.
-    /// </summary>
     public class ComboCounterBinder : MonoBehaviour {
         public Text text;
-        public Color playerColor = new Color(0.2f,0.6f,1f,1f);
-        public Color aiColor = new Color(1f,0.35f,0.35f,1f);
-        void Update() {
-            var inst = Systems.ComboCounter.Instance; if (!inst || !text) return;
-            int n = inst.currentCount;
-            if (n <= 1) { text.text = ""; return; }
-            bool player = inst.currentAttacker && inst.currentAttacker.team == Fighter.FighterTeam.Player;
-            text.color = player ? playerColor : aiColor;
-            text.text = n.ToString() + " HIT";
+        void OnEnable() {
+            if (!text) text = GetComponent<Text>();
+            if (Systems.ComboCounter.Instance) Systems.ComboCounter.Instance.OnComboChanged += OnCombo;
+            InitNow();
+        }
+        void OnDisable() { if (Systems.ComboCounter.Instance) Systems.ComboCounter.Instance.OnComboChanged -= OnCombo; }
+        void InitNow() { OnCombo(0, null); }
+        void OnCombo(int count, Fighter.FighterController attacker) {
+            if (!text) return;
+            if (count <= 0) { text.text = ""; return; }
+            text.text = attacker != null && attacker.team == Fighter.FighterTeam.Player ? $"P1 {count} HIT" : $"P2 {count} HIT";
         }
     }
 }

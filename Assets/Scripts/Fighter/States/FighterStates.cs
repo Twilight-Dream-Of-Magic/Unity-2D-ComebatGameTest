@@ -11,6 +11,7 @@ namespace Fighter.States {
         public virtual void Tick() {}
         public virtual void Exit() {}
         protected bool HasMoveInput(out float x) { x = fighter.PendingCommands.moveX; return Mathf.Abs(x) > 0.01f; }
+        public void OwnerNotifyStateChanged() { fighter?.NotifyStateChanged(); }
     }
 
     public class IdleState : FighterStateBase {
@@ -131,6 +132,7 @@ namespace Fighter.States {
         readonly string trigger;
         float startup, active, recovery; float t; enum Phase { Startup, Active, Recovery } Phase phase;
         float elapsedFromStart;
+        const float Epsilon = 0.0005f;
         public AttackState(FighterController f, string trig) : base(f) { trigger = trig; }
         public override string Name => "Attack-" + trigger;
         public override void Enter() {
@@ -142,17 +144,18 @@ namespace Fighter.States {
             elapsedFromStart = 0f;
         }
         public override void Tick() {
-            t += Time.deltaTime;
-            elapsedFromStart += Time.deltaTime;
+            float dt = Time.deltaTime;
+            t += dt;
+            elapsedFromStart += dt;
             switch (phase) {
                 case Phase.Startup:
-                    if (t >= startup) { phase = Phase.Active; t = 0; fighter.SetAttackActive(true);} break;
+                    if (t + Epsilon >= startup) { phase = Phase.Active; t = 0; fighter.SetAttackActive(true);} break;
                 case Phase.Active:
                     if (AllowCancelNow(onWhiff:true) && fighter.TryConsumeComboCancel(out string to)) { fighter.TriggerAttack(to); phase = Phase.Startup; t = 0; elapsedFromStart = 0f; }
-                    else if (t >= active) { phase = Phase.Recovery; t = 0; fighter.SetAttackActive(false);} break;
+                    else if (t + Epsilon >= active) { phase = Phase.Recovery; t = 0; fighter.SetAttackActive(false);} break;
                 case Phase.Recovery:
                     if (AllowCancelNow(onWhiff:false) && fighter.TryConsumeComboCancel(out string to2)) { fighter.TriggerAttack(to2); phase = Phase.Startup; t = 0; elapsedFromStart = 0f; }
-                    else if (t >= recovery) { fighter.ClearCurrentMove(); fighter.StateMachine.SetState(fighter.Idle);} break;
+                    else if (t + Epsilon >= recovery) { fighter.ClearCurrentMove(); fighter.StateMachine.SetState(fighter.Idle);} break;
             }
         }
         public override void Exit() { fighter.SetAttackActive(false); fighter.ClearCurrentMove(); }
@@ -162,11 +165,11 @@ namespace Fighter.States {
             if (md == null) return false;
             if (onWhiff) {
                 if (!md.canCancelOnWhiff) return false;
-                return elapsedFromStart >= md.onWhiffCancelWindow.x && elapsedFromStart <= md.onWhiffCancelWindow.y;
+                return elapsedFromStart + Epsilon >= md.onWhiffCancelWindow.x && elapsedFromStart <= md.onWhiffCancelWindow.y + Epsilon;
             }
             // On hit/block: gates由 DamageReceiver 在命中/格挡时触发 RequestComboCancel 决定，窗口在此兜底检查
-            if (md.canCancelOnHit && elapsedFromStart >= md.onHitCancelWindow.x && elapsedFromStart <= md.onHitCancelWindow.y) return true;
-            if (md.canCancelOnBlock && elapsedFromStart >= md.onBlockCancelWindow.x && elapsedFromStart <= md.onBlockCancelWindow.y) return true;
+            if (md.canCancelOnHit && elapsedFromStart + Epsilon >= md.onHitCancelWindow.x && elapsedFromStart <= md.onHitCancelWindow.y + Epsilon) return true;
+            if (md.canCancelOnBlock && elapsedFromStart + Epsilon >= md.onBlockCancelWindow.x && elapsedFromStart <= md.onBlockCancelWindow.y + Epsilon) return true;
             return false;
         }
     }

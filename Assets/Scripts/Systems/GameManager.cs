@@ -1,16 +1,13 @@
 using UnityEngine;
+using Framework;
 
 namespace Systems {
     public enum Difficulty { Easy, Normal, Hard }
 
-    public class GameManager : MonoBehaviour {
-        public static GameManager Instance { get; private set; }
+    public class GameManager : MonoSingleton<GameManager> {
         public Difficulty difficulty = Difficulty.Normal;
 
-        private void Awake() {
-            if (Instance != null) { Destroy(gameObject); return; }
-            Instance = this; DontDestroyOnLoad(gameObject);
-        }
+        protected override void OnSingletonInit() {}
 
         public void SetDifficulty(int idx) { difficulty = (Difficulty)Mathf.Clamp(idx, 0, 2); }
         public void SetMasterVolume(float v) { if (AudioManager.Instance) AudioManager.Instance.masterVolume = v; }

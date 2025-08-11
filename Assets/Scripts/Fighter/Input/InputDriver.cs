@@ -9,6 +9,7 @@ namespace Fighter.InputSystem {
     public class InputDriver : MonoBehaviour {
         FighterController fighter;
         IInputSource[] sources;
+        IInputSource selected;
 
         void Awake() {
             fighter = GetComponent<FighterController>();
@@ -17,13 +18,26 @@ namespace Fighter.InputSystem {
 
         void Update() {
             if (!fighter) return;
-            // refresh for dynamic add/remove
-            if (sources == null || sources.Length == 0) sources = GetComponents<IInputSource>();
+            sources = GetComponents<IInputSource>();
             if (sources == null || sources.Length == 0) return;
 
-            foreach (var s in sources) {
-                if (s != null && s.TryGetCommands(fighter, out var cmds)) { fighter.SetCommands(cmds); break; }
+            selected = PickStrictByType(sources);
+            if (selected != null && selected.TryGetCommands(fighter, out var cmds)) {
+                fighter.SetCommands(cmds);
             }
+        }
+
+        IInputSource PickStrictByType(IInputSource[] list) {
+            // Strict separation: Player > Scripted > AI. If a type exists, ignore others entirely.
+            IInputSource player = null, scripted = null, ai = null;
+            foreach (var s in list) {
+                if (s is PlayerInputSource && (s as Behaviour).enabled) { player = s; break; }
+            }
+            if (player != null) return player;
+            foreach (var s in list) if (s is ScriptedInputSource && (s as Behaviour).enabled) { scripted = s; break; }
+            if (scripted != null) return scripted;
+            foreach (var s in list) if (s is AIInputSource && (s as Behaviour).enabled) { ai = s; break; }
+            return ai;
         }
     }
 }

@@ -2,18 +2,19 @@ using UnityEngine;
 using UnityEngine.UI;
 
 namespace UI {
-    public class EnergyBarBinder : MonoBehaviour {
+    public class MeterTextBinder : MonoBehaviour {
         public Fighter.FighterController fighter;
-        public Slider slider;
+        public Text text;
         Fighter.Core.FighterResources res;
         void OnEnable() {
+            if (!text) text = GetComponent<Text>();
             if (!fighter) fighter = GetComponentInParent<Fighter.FighterController>();
             res = fighter ? fighter.GetComponent<Fighter.Core.FighterResources>() : null;
             if (res != null) res.OnMeterChanged += OnMeterChanged;
-            // init
-            if (fighter && slider) slider.value = fighter.maxMeter > 0 ? (float)fighter.meter / fighter.maxMeter : 0f;
+            InitNow();
         }
         void OnDisable() { if (res != null) res.OnMeterChanged -= OnMeterChanged; }
-        void OnMeterChanged(int current, int max) { if (slider) slider.value = max > 0 ? (float)current / max : 0f; }
+        void InitNow() { if (text && fighter) text.text = fighter.meter + "/" + fighter.maxMeter; }
+        void OnMeterChanged(int current, int max) { if (text) text.text = current + "/" + max; }
     }
 }

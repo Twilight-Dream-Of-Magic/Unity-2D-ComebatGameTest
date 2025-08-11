@@ -59,6 +59,7 @@ namespace Fighter {
         public event Action<FighterController> OnDamaged; // invoked on victim when real damage dealt
         /// <summary>Raised for any damage event (victim, attacker), useful for global UI counters.</summary>
         public static event Action<FighterController, FighterController> OnAnyDamage; // (victim, attacker)
+        public event Action<string,string> OnStateChanged; // (stateName, moveName)
 
         [Header("Physics")]
         /// <summary>Layer mask considered ground for grounded checks.</summary>
@@ -184,6 +185,8 @@ namespace Fighter {
         }
 
         private void Start() { StateMachine.SetState(Idle); }
+
+        public void NotifyStateChanged() { OnStateChanged?.Invoke(StateMachine?.Current?.Name ?? "-", debugMoveName ?? ""); }
 
         // Animator Event hooks (to be called from throw animations)
         public void AE_ThrowStart() { /* placeholder for throw windup */ }
@@ -371,6 +374,7 @@ namespace Fighter {
             int maxHp = stats != null ? stats.maxHealth : 100;
             int before = currentHealth;
             currentHealth = Mathf.Clamp(currentHealth - res.finalDamage, 0, maxHp);
+            var fr = GetComponent<Fighter.Core.FighterResources>(); if (fr != null) fr.OnHealthChanged?.Invoke(currentHealth, maxHp);
 
             if (currentHealth == 0) { StateMachine.SetState(KO); if (AnimatorReady()) animator.SetTrigger("KO"); return; }
 
@@ -412,6 +416,7 @@ namespace Fighter {
         /// <summary>
         /// Local feedback on successful contact: apply hit-stop and shake.
         /// </summary>
+        public event Action<float> OnHitConfirm; // (hitstop seconds)
         public void OnHitConfirmedLocal(float seconds) {
             var atk = GetComponent<Fighter.Core.AttackExecutor>();
             if (atk) { atk.OnHitConfirmedLocal(seconds); return; }
@@ -420,6 +425,7 @@ namespace Fighter {
             int frames = FrameClock.SecondsToFrames(seconds);
             FreezeFrames(frames);
             Systems.CameraShaker.Instance?.Shake(0.1f, seconds);
+            OnHitConfirm?.Invoke(seconds);
         }
 
         public void MarkHitConfirmed(float duration = 0.35f) { hitConfirmTimer = Mathf.Max(hitConfirmTimer, duration); }

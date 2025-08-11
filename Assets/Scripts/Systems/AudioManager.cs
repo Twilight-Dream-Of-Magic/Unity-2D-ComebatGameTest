@@ -1,17 +1,16 @@
 using UnityEngine;
+using Framework;
 
 namespace Systems {
-    public class AudioManager : MonoBehaviour {
-        public static AudioManager Instance { get; private set; }
+    public class AudioManager : MonoSingleton<AudioManager> {
         public AudioSource bgmSource;
         public AudioSource sfxSource;
         [Range(0f,1f)] public float masterVolume = 1f;
         [Range(0f,1f)] public float bgmVolume = 0.7f;
         [Range(0f,1f)] public float sfxVolume = 1f;
 
-        private void Awake() {
-            if (Instance != null) { Destroy(gameObject); return; }
-            Instance = this; DontDestroyOnLoad(gameObject);
+        protected override void OnSingletonInit() {
+            // nothing for now
         }
 
         private void Update() {

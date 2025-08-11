@@ -9,7 +9,6 @@ namespace Fighter {
 
         float attackElapsed;
         bool inAttack;
-        bool contactOccurred; // set by external events in future; here we infer conservatively
 
         private void Reset() {
             if (fighter == null) fighter = GetComponent<FighterController>();
@@ -20,11 +19,11 @@ namespace Fighter {
             if (fighter == null) return;
 
             if (fighter.AnimatorIsTag("Attack")) {
-                if (!inAttack) { inAttack = true; attackElapsed = 0f; contactOccurred = false; }
+                if (!inAttack) { inAttack = true; attackElapsed = 0f; }
                 attackElapsed += Time.deltaTime;
                 TryComboCancel();
             } else {
-                inAttack = false; attackElapsed = 0f; contactOccurred = false;
+                inAttack = false; attackElapsed = 0f;
             }
         }
 
@@ -33,20 +32,20 @@ namespace Fighter {
             if (md == null || inputBuffer == null) return;
 
             bool allow = false;
-            // On whiff window
             if (md.canCancelOnWhiff && attackElapsed >= md.onWhiffCancelWindow.x && attackElapsed <= md.onWhiffCancelWindow.y) allow = true;
-            // On hit/block windows are further gated by states; as a fallback we allow if elapsed is within either window
             if (md.canCancelOnHit && attackElapsed >= md.onHitCancelWindow.x && attackElapsed <= md.onHitCancelWindow.y) allow = true;
             if (md.canCancelOnBlock && attackElapsed >= md.onBlockCancelWindow.x && attackElapsed <= md.onBlockCancelWindow.y) allow = true;
             if (!allow) return;
 
+            var cq = fighter.GetComponent<CommandQueue>();
+            if (!cq) return;
             if (md.cancelIntoTriggers != null && md.cancelIntoTriggers.Length > 0) {
                 foreach (var trig in md.cancelIntoTriggers) {
-                    if (MatchTrigger(trig)) { fighter.RequestComboCancel(trig); inputBuffer.Clear(); break; }
+                    if (MatchTrigger(trig)) { cq.EnqueueCombo(trig == "Light" ? CommandToken.Light : CommandToken.Heavy); inputBuffer.Clear(); break; }
                 }
             } else {
-                if (MatchTrigger("Heavy")) { fighter.RequestComboCancel("Heavy"); inputBuffer.Clear(); }
-                else if (MatchTrigger("Light")) { fighter.RequestComboCancel("Light"); inputBuffer.Clear(); }
+                if (MatchTrigger("Heavy")) { cq.EnqueueCombo(CommandToken.Heavy); inputBuffer.Clear(); }
+                else if (MatchTrigger("Light")) { cq.EnqueueCombo(CommandToken.Light); inputBuffer.Clear(); }
             }
         }
 
@@ -54,7 +53,7 @@ namespace Fighter {
             switch (trig) {
                 case "Light": return inputBuffer.Match(CommandToken.Light);
                 case "Heavy": return inputBuffer.Match(CommandToken.Heavy);
-                case "Super": return inputBuffer.Match(CommandToken.Heavy); // SpecialInputResolver sets RequestComboCancel for real supers
+                case "Super": return inputBuffer.Match(CommandToken.Heavy);
                 default: return false;
             }
         }

@@ -23,10 +23,19 @@ namespace Fighter.InputSystem {
             commands = default;
             if (!fighter) return false;
 
-            // token enqueue on key down
-            if (Input.GetKeyDown(KeyCode.J)) commandQueue.Enqueue(CommandToken.Light);
-            if (Input.GetKeyDown(KeyCode.K)) commandQueue.Enqueue(CommandToken.Heavy);
-            if (Input.GetKey(KeyCode.J) && Input.GetKeyDown(KeyCode.K) || Input.GetKey(KeyCode.K) && Input.GetKeyDown(KeyCode.J)) commandQueue.Enqueue(CommandToken.Throw);
+            // prioritize Throw if J+K simultaneous this frame
+            bool jDown = Input.GetKeyDown(KeyCode.J);
+            bool kDown = Input.GetKeyDown(KeyCode.K);
+            bool jHeld = Input.GetKey(KeyCode.J);
+            bool kHeld = Input.GetKey(KeyCode.K);
+            bool throwThisFrame = (jHeld && kDown) || (kHeld && jDown);
+            if (throwThisFrame) {
+                commandQueue.Enqueue(CommandToken.Throw);
+            } else {
+                if (jDown) commandQueue.Enqueue(CommandToken.Light);
+                if (kDown) commandQueue.Enqueue(CommandToken.Heavy);
+            }
+
             if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow)) commandQueue.Enqueue(CommandToken.Up);
             if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow)) commandQueue.Enqueue(CommandToken.Down);
             if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow)) commandQueue.Enqueue(fighter.facingRight ? CommandToken.Back : CommandToken.Forward);

@@ -2,6 +2,7 @@ using UnityEngine;
 
 namespace Systems {
     public class CameraFramer : MonoBehaviour {
+        public static CameraFramer Instance { get; private set; }
         public Transform targetA;
         public Transform targetB;
         public Vector2 arenaHalfExtents = new Vector2(8f, 3f);
@@ -12,6 +13,8 @@ namespace Systems {
         Vector3 basePos; // default z
 
         void Awake() {
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            Instance = this;
             cam = GetComponent<Camera>();
             basePos = transform.position;
         }

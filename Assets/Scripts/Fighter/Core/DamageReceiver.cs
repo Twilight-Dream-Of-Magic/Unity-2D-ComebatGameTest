@@ -23,6 +23,7 @@ namespace Fighter.Core {
             int maxHp = fighter.stats != null ? fighter.stats.maxHealth : 100;
             int before = fighter.currentHealth;
             fighter.currentHealth = Mathf.Clamp(fighter.currentHealth - res.finalDamage, 0, maxHp);
+            var frc = fighter.GetComponent<FighterResources>(); if (frc != null) frc.OnHealthChanged?.Invoke(fighter.currentHealth, maxHp);
 
             if (fighter.currentHealth == 0) { fighter.StateMachine.SetState(fighter.KO); if (AnimatorReady()) animator.SetTrigger("KO"); return; }
 
@@ -30,22 +31,17 @@ namespace Fighter.Core {
             if (!res.wasBlocked) {
                 var rb = fighter.rb; rb.velocity = new Vector2(dir * info.knockback.x, info.knockback.y);
                 if (AnimatorReady()) animator.SetTrigger("Hit");
-                if (info.knockdownKind == Combat.KnockdownKind.Soft || info.knockdownKind == Combat.KnockdownKind.Hard) {
-                    float downDur = info.knockdownKind == Combat.KnockdownKind.Hard ? 1.0f : 0.6f;
-                    fighter.Downed.Begin(info.knockdownKind == Combat.KnockdownKind.Hard, downDur);
-                    fighter.StateMachine.SetState(fighter.Downed);
-                } else {
-                    fighter.Hitstun.Begin(res.appliedStun);
-                    fighter.StateMachine.SetState(fighter.Hitstun);
-                }
+                fighter.Hitstun.Begin(res.appliedStun);
+                fighter.StateMachine.SetState(fighter.Hitstun);
 
                 // attacker feedback
                 attacker.OnHitConfirmedLocal(res.appliedHitstop);
-                attacker.MarkHitConfirmed();
                 attacker.AddMeter(attacker.CurrentMove ? attacker.CurrentMove.meterOnHit : 20);
                 attacker.AddExternalImpulse(-dir * res.appliedPushback);
                 // victim feedback
                 Systems.CameraShaker.Instance?.Shake(0.1f, res.appliedHitstop);
+                var pos = GetComponent<Collider2D>() ? (Vector3)GetComponent<Collider2D>().bounds.center : transform.position;
+                Systems.HitEffectManager.Instance?.SpawnDamageNumber(pos + Vector3.up * 0.6f, res.finalDamage, fighter.team == FighterTeam.Player);
 
                 if (fighter.currentHealth < before) { fighter.RaiseDamaged(attacker); }
             } else {

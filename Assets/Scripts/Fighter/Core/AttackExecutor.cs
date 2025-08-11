@@ -14,6 +14,7 @@ namespace Fighter.Core {
 
         bool hitStopApplied;
         Vector3[] originalLocalPos;
+        bool activeState;
 
         void Awake() {
             if (!fighter) fighter = GetComponent<FighterController>();
@@ -38,6 +39,8 @@ namespace Fighter.Core {
         }
 
         public void SetAttackActive(bool on) {
+            if (activeState == on) return; // idempotent
+            activeState = on;
             fighter.SetDebugHitActive(on);
             if (on) { fighter.IncrementAttackInstanceId(); fighter.ClearHitVictimsSet(); hitStopApplied = false; }
             if (hitboxes == null) return;

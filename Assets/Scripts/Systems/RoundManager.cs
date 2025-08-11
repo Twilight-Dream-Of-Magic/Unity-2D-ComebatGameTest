@@ -4,35 +4,35 @@ using Fighter;
 
 namespace Systems {
     /// <summary>
-    /// Manages a single round: syncs HP bars, updates a countdown timer, detects end conditions (KO or time over),
-    /// decides the winner text, pauses time, and shows result UI. Exposes references for HUD binding.
+    /// Manages a single round: updates a countdown timer, detects end conditions (KO or time over),
+    /// decides the winner text, pauses time, and broadcasts timer/end events.
     /// </summary>
     public class RoundManager : MonoBehaviour {
-        /// <summary>Player 1 and Player 2 fighter references.</summary>
         public FighterController p1, p2;
-        /// <summary>HP sliders bound to P1/P2 current health.</summary>
-        public Slider p1Hp, p2Hp;
-        /// <summary>Round duration in seconds.</summary>
+        public Slider p1Hp, p2Hp; // legacy references (no longer written)
         public float roundTime = 60f;
-        /// <summary>Timer text UI to display remaining time.</summary>
-        public Text timerText;
-        /// <summary>Optional result panel controller (restart/back to menu).</summary>
+        public Text timerText; // legacy optional
         public UI.ResultPanel resultPanel;
-        /// <summary>Winner/draw text element.</summary>
-        public Text resultText;
+        public Text resultText; // legacy optional
+
+        public System.Action<int> OnTimerChanged;     // seconds left
+        public System.Action<string> OnRoundEnd;      // result string
+
         float timeLeft;
         bool ended;
         bool timeout;
+        int lastSeconds = -1;
 
-        private void Start() { timeLeft = roundTime; Time.timeScale = 1f; if (resultText) { resultText.gameObject.SetActive(false); resultText.fontSize = 40; } }
+        private void Start() {
+            timeLeft = roundTime; Time.timeScale = 1f;
+            if (resultText) { resultText.gameObject.SetActive(false); resultText.fontSize = 40; }
+            BroadcastTimerIfChanged();
+        }
         private void Update() {
             if (!p1 || !p2) { var fighters = FindObjectsOfType<FighterController>(); if (fighters.Length >= 2) { p1 = fighters[0]; p2 = fighters[1]; } }
-            if (!p1Hp || !p2Hp) { var sliders = FindObjectsOfType<Slider>(); if (sliders.Length >= 2) { p1Hp = sliders[0]; p2Hp = sliders[1]; } }
             if (ended) return;
             timeLeft -= Time.deltaTime;
-            if (p1Hp) p1Hp.value = p1 && p1.stats ? (float)p1.currentHealth / p1.stats.maxHealth : 0f;
-            if (p2Hp) p2Hp.value = p2 && p2.stats ? (float)p2.currentHealth / p2.stats.maxHealth : 0f;
-            if (timerText) timerText.text = Mathf.CeilToInt(Mathf.Max(0, timeLeft)).ToString();
+            BroadcastTimerIfChanged();
 
             if ((p1 && p1.currentHealth == 0) || (p2 && p2.currentHealth == 0) || timeLeft <= 0) {
                 timeout = timeLeft <= 0;
@@ -40,9 +40,15 @@ namespace Systems {
             }
         }
 
-        /// <summary>
-        /// Pause time, compute winner/draw text, and reveal result UI overlay.
-        /// </summary>
+        void BroadcastTimerIfChanged() {
+            int seconds = Mathf.CeilToInt(Mathf.Max(0, timeLeft));
+            if (seconds != lastSeconds) {
+                lastSeconds = seconds;
+                OnTimerChanged?.Invoke(seconds);
+                if (timerText) timerText.text = seconds.ToString();
+            }
+        }
+
         private void EndRound() {
             ended = true;
             Time.timeScale = 0f;
@@ -57,12 +63,13 @@ namespace Systems {
                 else txt = "P2 Wins";
             }
 
+            OnRoundEnd?.Invoke(txt);
             if (resultText) {
                 resultText.text = txt;
                 resultText.color = txt.Contains("P1") ? new Color(0.4f,0.8f,1f,1f) : txt.Contains("P2") ? new Color(1f,0.4f,0.4f,1f) : Color.white;
                 resultText.gameObject.SetActive(true);
             }
-            if (resultPanel) resultPanel.Show();
+            if (resultPanel && resultPanel.panel) resultPanel.panel.SetActive(true);
         }
     }
 }
