@@ -125,6 +125,9 @@ namespace Fighter.InputSystem {
                     break;
             }
 
+            // if airborne and cooldown allows, sometimes go for an air double-jump to adjust arc
+            if (!fighter.IsGrounded() && jumpCd <= 0f && fighter.CanJump() && Random.value < 0.25f) { wantJump = true; jumpCd = jumpCooldown; }
+
             // smooth movement to avoid jitter
             smoothedMoveX = Mathf.MoveTowards(smoothedMoveX, targetMoveX, moveSmooth * Time.deltaTime);
             // hold retreat a bit to avoid spam switching

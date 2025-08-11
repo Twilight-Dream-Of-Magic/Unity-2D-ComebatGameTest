@@ -33,6 +33,7 @@ namespace Fighter {
     }
 
     [RequireComponent(typeof(Rigidbody2D))]
+    [DefaultExecutionOrder(50)]
     public class FighterController : MonoBehaviour {
         [Header("Refs")]
         /// <summary>Core character stat block (HP, speeds, gravity, chip ratio, dodge durations).</summary>
@@ -123,7 +124,7 @@ namespace Fighter {
         readonly HashSet<FighterController> hitVictims = new HashSet<FighterController>();
         bool hitStopApplied;
 
-        int jumpsUsed;
+        JumpRule jumpRule;
         bool dashRequested; bool dashBack;
 
         private void Awake() {
@@ -139,6 +140,9 @@ namespace Fighter {
 
             if (hurtboxes != null) foreach (var h in hurtboxes) if (h != null) h.owner = this;
             if (hitboxes != null) foreach (var h in hitboxes) if (h != null) h.owner = this;
+
+            jumpRule = GetComponent<JumpRule>();
+            if (!jumpRule) jumpRule = gameObject.AddComponent<JumpRule>();
 
             StateMachine = new StateMachine();
             Idle = new IdleState(this);
@@ -174,8 +178,8 @@ namespace Fighter {
             if (loco) loco.ApplyFreezeVisual(IsFrozen()); else ApplyFreezeVisual();
             if (loco) loco.AutoFaceOpponent(); else AutoFaceOpponent();
 
-            // reset air jump counter when grounded
-            if (IsGrounded()) jumpsUsed = 0;
+            // update jump rule timing and input buffer
+            if (jumpRule != null) jumpRule.Tick(IsGrounded(), PendingCommands.jump);
 
             UpdateHurtboxEnable();
             if (!IsFrozen() && StateMachine != null) StateMachine.Tick();
@@ -245,12 +249,11 @@ namespace Fighter {
         public void AirMove(float x) { var loco = GetComponent<FighterLocomotion>(); if (loco) loco.AirMove(x); else rb.velocity = new Vector2(x * (stats != null ? stats.walkSpeed : 6f), rb.velocity.y); }
         /// <summary>Attempt to jump if grounded and update animator.</summary>
         public bool CanJump() {
-            if (IsGrounded()) return true;
-            return jumpsUsed < 1; // allow one additional air jump (double-jump total = 2)
+            if (!jumpRule) jumpRule = GetComponent<JumpRule>();
+            return jumpRule ? jumpRule.CanPerformJump(IsGrounded()) : IsGrounded();
         }
         public void DoJump() {
-            // increment air jump counter only when not grounded
-            if (!IsGrounded()) jumpsUsed++;
+            if (jumpRule) jumpRule.NotifyJumpExecuted(IsGrounded());
             var loco = GetComponent<FighterLocomotion>();
             if (loco) loco.Jump();
             else { rb.velocity = new Vector2(rb.velocity.x, stats != null ? stats.jumpForce : 12f); if (AnimatorReady()) animator.SetTrigger("Jump"); }

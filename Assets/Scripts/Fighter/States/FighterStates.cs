@@ -23,7 +23,7 @@ namespace Fighter.States {
             if (c.block && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Block); return; }
             if (c.dodge && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Dodge); return; }
             if (c.crouch && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Crouch); return; }
-            if (c.jump && fighter.CanJump()) { fighter.DoJump(); fighter.StateMachine.SetState(fighter.PreJump); return; }
+            if ((c.jump && fighter.CanJump()) || (fighter.GetComponent<JumpRule>()?.ShouldConsumeBufferedJump(fighter.IsGrounded()) ?? false)) { fighter.DoJump(); fighter.StateMachine.SetState(fighter.PreJump); return; }
             if (c.light) { fighter.StateMachine.SetState(fighter.AttackLight); return; }
             if (c.heavy) { fighter.StateMachine.SetState(fighter.AttackHeavy); return; }
             if (HasMoveInput(out float x)) fighter.Move(x); else fighter.HaltHorizontal();
@@ -40,7 +40,7 @@ namespace Fighter.States {
             if (c.block && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Block); return; }
             if (c.dodge && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Dodge); return; }
             if (c.crouch && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Crouch); return; }
-            if (c.jump && fighter.CanJump()) { fighter.DoJump(); fighter.StateMachine.SetState(fighter.PreJump); return; }
+            if ((c.jump && fighter.CanJump()) || (fighter.GetComponent<JumpRule>()?.ShouldConsumeBufferedJump(fighter.IsGrounded()) ?? false)) { fighter.DoJump(); fighter.StateMachine.SetState(fighter.PreJump); return; }
             if (c.light) { fighter.StateMachine.SetState(fighter.AttackLight); return; }
             if (c.heavy) { fighter.StateMachine.SetState(fighter.AttackHeavy); return; }
             fighter.Move(x);
@@ -81,6 +81,8 @@ namespace Fighter.States {
             if (fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Landing); return; }
             var c = fighter.PendingCommands;
             if (Mathf.Abs(c.moveX) > 0.01f) fighter.AirMove(c.moveX);
+            var rule = fighter.GetComponent<JumpRule>();
+            if ((c.jump && fighter.CanJump()) || (rule != null && rule.ShouldConsumeBufferedJump(false))) { fighter.DoJump(); return; }
             if (c.light) { fighter.StateMachine.SetState(fighter.AttackLight); return; }
             if (c.heavy) { fighter.StateMachine.SetState(fighter.AttackHeavy); return; }
         }

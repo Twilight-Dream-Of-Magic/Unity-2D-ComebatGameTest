@@ -11,7 +11,7 @@ namespace Dev {
         public bool createManagers = true;
         public bool createUI = true;
         public bool createGround = true;
-        public Vector2 arenaHalfExtents = new Vector2(10f, 3.5f);
+        public Vector2 arenaHalfExtents = new Vector2(256f, 3.5f);
         public bool demoScripted = false;
 
         private void Start() {
@@ -49,15 +49,15 @@ namespace Dev {
         void CreateGround() {
             var g = new GameObject("Ground");
             var col = g.AddComponent<BoxCollider2D>();
-            col.size = new Vector2(arenaHalfExtents.x * 2f + 4f, 0.5f);
+            col.size = new Vector2(512f, 0.5f);
             g.transform.position = new Vector3(0f, -1.8f, 0f);
             g.layer = LayerMask.NameToLayer("Default");
             var vis = new GameObject("Visual"); vis.transform.SetParent(g.transform, false);
             var sr = vis.AddComponent<SpriteRenderer>(); sr.sprite = CreateSolidSprite(new Color(0.15f, 0.6f, 0.15f, 1f));
             vis.transform.localScale = new Vector3(col.size.x, col.size.y, 1f);
 
-            // add side walls to prevent falling when pushed to corners
-            float wallX = arenaHalfExtents.x + 2f;
+            // side walls
+            float wallX = 256f + 2f;
             float wallHeight = 7f;
             float wallWidth = 0.5f;
             var left = new GameObject("WallLeft"); left.transform.position = new Vector3(-wallX - wallWidth * 0.5f, -1.2f, 0f);
@@ -167,7 +167,7 @@ namespace Dev {
         void LinkOpponents(FighterController p1, FighterController p2) {
             p1.opponent = p2.transform; p2.opponent = p1.transform;
             var fr = Camera.main ? Camera.main.GetComponent<Systems.CameraFramer>() : null;
-            if (fr) { fr.targetA = p1.transform; fr.targetB = p2.transform; }
+            if (fr) { fr.targetA = p1.transform; fr.targetB = p2.transform; fr.arenaHalfExtents = arenaHalfExtents; }
         }
 
         Sprite CreateSolidSprite(Color c) {
