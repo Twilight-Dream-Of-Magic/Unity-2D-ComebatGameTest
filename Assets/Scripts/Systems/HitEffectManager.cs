@@ -10,19 +10,37 @@ namespace Systems {
         }
 
         public void SpawnHit(Vector3 position, bool isPlayerHit) {
-            var go = new GameObject("HitEffect");
+            // Spawn small burst of colored quads
+            int count = Random.Range(6, 10);
+            for (int i = 0; i < count; i++) SpawnDot(position, isPlayerHit);
+        }
+
+        void SpawnDot(Vector3 pos, bool isPlayerHit) {
+            var go = new GameObject("HitFX");
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite = CreateDot();
             sr.sortingOrder = 1000;
-            sr.color = isPlayerHit ? new Color(1f, 0.3f, 0.3f, 0.85f) : new Color(0.3f, 0.8f, 1f, 0.85f);
-            go.transform.position = position;
-            go.transform.localScale = Vector3.one * 0.6f;
-            go.AddComponent<AutoDestroy>().life = 0.25f;
+            // if player was hit -> reddish; if enemy hit -> bluish
+            sr.color = isPlayerHit ? new Color(1f, 0.3f, 0.3f, 0.9f) : new Color(0.3f, 0.8f, 1f, 0.9f);
+            go.transform.position = pos;
+            float scale = Random.Range(0.35f, 0.6f);
+            go.transform.localScale = Vector3.one * scale;
+            var drift = go.AddComponent<BurstDrift>();
+            drift.life = Random.Range(0.18f, 0.32f);
+            drift.velocity = Random.insideUnitCircle * Random.Range(1.0f, 2.0f);
         }
 
-        class AutoDestroy : MonoBehaviour {
+        class BurstDrift : MonoBehaviour {
             public float life = 0.25f; float t;
-            void Update() { t += Time.unscaledDeltaTime; if (t >= life) Destroy(gameObject); }
+            public Vector2 velocity;
+            void Update() {
+                t += Time.unscaledDeltaTime;
+                transform.position += (Vector3)(velocity * Time.unscaledDeltaTime);
+                // fade out
+                var sr = GetComponent<SpriteRenderer>();
+                if (sr) sr.color = new Color(sr.color.r, sr.color.g, sr.color.b, Mathf.Max(0, 1f - t / life));
+                if (t >= life) Destroy(gameObject);
+            }
         }
 
         Sprite CreateDot() {

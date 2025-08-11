@@ -4,14 +4,25 @@ using Combat;
 using Systems;
 
 namespace UI {
+    /// <summary>
+    /// Lightweight on-screen debug display for fighter states and simple input echoing.
+    /// In compact mode shows current FSM state and active move; in detailed mode shows frame data and advantage.
+    /// </summary>
     public class DebugHUD : MonoBehaviour {
+        /// <summary>Legacy single fighter reference; use fighterP1/fighterP2 for dual display.</summary>
         public Fighter.FighterController fighter; // legacy single
+        /// <summary>Player 1 fighter used for dual-line status.</summary>
         public Fighter.FighterController fighterP1;
+        /// <summary>Player 2 fighter used for dual-line status.</summary>
         public Fighter.FighterController fighterP2;
+        /// <summary>Optional input buffer to display recent tokens (currently minimal).</summary>
         public InputBuffer inputBuffer;
+        /// <summary>Primary text element to print fighter states.</summary>
         public Text stateText;
+        /// <summary>Optional text for input tokens.</summary>
         public Text inputText;
         [Header("Display")]
+        /// <summary>When true, show frame data details (startup/active/recovery/advantage).</summary>
         public bool showDetails = false; // compact by default
 
         private void Reset() {
@@ -28,14 +39,14 @@ namespace UI {
                 if (f == null) return "-";
                 var st = f.StateMachine?.Current?.Name ?? "None";
                 if (!showDetails) {
-                    string moveLine = f.CurrentMove != null ? $"{f.CurrentMove.moveId}({f.CurrentMove.triggerName}) A:{f.debugHitActive}" : "";
+                    string moveLine = f.CurrentMove != null ? $"{f.CurrentMove.triggerName} A:{f.debugHitActive}" : "";
                     return $"{(f.team==Fighter.FighterTeam.Player?"P1":"P2")}  {st}  {moveLine}";
                 } else {
                     string moveLine = "";
                     if (f.CurrentMove != null) {
                         int advHit = FrameClock.SecondsToFrames(Mathf.Max(0f, f.CurrentMove.hitstun - f.CurrentMove.recovery));
                         int advBlk = FrameClock.SecondsToFrames(Mathf.Max(0f, f.CurrentMove.blockstun - f.CurrentMove.recovery));
-                        moveLine = $" | {f.CurrentMove.moveId}({f.CurrentMove.triggerName}) A:{f.debugHitActive} st:{FrameClock.SecondsToFrames(f.CurrentMove.startup)} a:{FrameClock.SecondsToFrames(f.CurrentMove.active)} r:{FrameClock.SecondsToFrames(f.CurrentMove.recovery)} advH:{advHit} advB:{advBlk} HP:{f.currentHealth} M:{f.meter}";
+                        moveLine = $" | {f.CurrentMove.triggerName} A:{f.debugHitActive} st:{FrameClock.SecondsToFrames(f.CurrentMove.startup)} a:{FrameClock.SecondsToFrames(f.CurrentMove.active)} r:{FrameClock.SecondsToFrames(f.CurrentMove.recovery)} advH:{advHit} advB:{advBlk} HP:{f.currentHealth} M:{f.meter}";
                     }
                     return $"{(f.team==Fighter.FighterTeam.Player?"P1":"P2")} {st}{moveLine}";
                 }

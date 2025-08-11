@@ -5,7 +5,7 @@ namespace Systems {
         public static CameraShaker Instance { get; private set; }
         Vector3 originalPos; float timeLeft; float amplitude;
         private void Awake() { Instance = this; originalPos = transform.localPosition; }
-        public void Shake(float amp, float duration) { amplitude = amp; timeLeft = duration; }
+        public void Shake(float amp, float duration) { amplitude = Mathf.Max(amplitude, amp); timeLeft = Mathf.Max(timeLeft, duration); }
         private void LateUpdate() {
             if (timeLeft > 0) {
                 timeLeft -= Time.unscaledDeltaTime;

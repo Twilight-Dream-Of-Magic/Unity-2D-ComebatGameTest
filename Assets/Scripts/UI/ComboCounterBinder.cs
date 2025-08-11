@@ -2,6 +2,10 @@ using UnityEngine;
 using UnityEngine.UI;
 
 namespace UI {
+    /// <summary>
+    /// Displays the current combo count (>=2) in the center HUD, colored by attacker team.
+    /// Reads from the singleton ComboCounter produced during hits.
+    /// </summary>
     public class ComboCounterBinder : MonoBehaviour {
         public Text text;
         public Color playerColor = new Color(0.2f,0.6f,1f,1f);

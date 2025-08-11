@@ -3,6 +3,7 @@ namespace Combat {
         None,
         Light,
         Heavy,
+        Throw,
         Up,
         Down,
         Forward,

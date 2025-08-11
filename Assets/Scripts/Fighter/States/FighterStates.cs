@@ -19,10 +19,11 @@ namespace Fighter.States {
         public override void Enter() { fighter.SetAnimatorBool("Block", false); }
         public override void Tick() {
             var c = fighter.PendingCommands;
+            if (fighter.TryConsumeDashRequest(out bool back)) { fighter.StateMachine.SetState(back ? (FighterStateBase)fighter.Backdash : fighter.Dash); return; }
             if (c.block && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Block); return; }
             if (c.dodge && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Dodge); return; }
             if (c.crouch && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Crouch); return; }
-            if (c.jump && fighter.IsGrounded()) { fighter.Jump(); fighter.StateMachine.SetState(fighter.JumpState); return; }
+            if (c.jump && fighter.CanJump()) { fighter.DoJump(); fighter.StateMachine.SetState(fighter.PreJump); return; }
             if (c.light) { fighter.StateMachine.SetState(fighter.AttackLight); return; }
             if (c.heavy) { fighter.StateMachine.SetState(fighter.AttackHeavy); return; }
             if (HasMoveInput(out float x)) fighter.Move(x); else fighter.HaltHorizontal();
@@ -35,10 +36,11 @@ namespace Fighter.States {
         public override void Tick() {
             var c = fighter.PendingCommands;
             if (!HasMoveInput(out float x)) { fighter.StateMachine.SetState(fighter.Idle); return; }
+            if (fighter.TryConsumeDashRequest(out bool back)) { fighter.StateMachine.SetState(back ? (FighterStateBase)fighter.Backdash : fighter.Dash); return; }
             if (c.block && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Block); return; }
             if (c.dodge && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Dodge); return; }
             if (c.crouch && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Crouch); return; }
-            if (c.jump && fighter.IsGrounded()) { fighter.Jump(); fighter.StateMachine.SetState(fighter.JumpState); return; }
+            if (c.jump && fighter.CanJump()) { fighter.DoJump(); fighter.StateMachine.SetState(fighter.PreJump); return; }
             if (c.light) { fighter.StateMachine.SetState(fighter.AttackLight); return; }
             if (c.heavy) { fighter.StateMachine.SetState(fighter.AttackHeavy); return; }
             fighter.Move(x);
@@ -58,12 +60,29 @@ namespace Fighter.States {
         public override void Exit() { fighter.IsCrouching = false; fighter.SetAnimatorBool("Crouch", false); }
     }
 
+    public class PreJumpState : FighterStateBase {
+        float t; public PreJumpState(FighterController f) : base(f) {}
+        public override string Name => "PreJump";
+        public override void Enter() { t = 0.05f; }
+        public override void Tick() { t -= Time.deltaTime; if (t <= 0) fighter.StateMachine.SetState(fighter.JumpState); }
+    }
+
+    public class LandingState : FighterStateBase {
+        float t; public LandingState(FighterController f) : base(f) {}
+        public override string Name => "Landing";
+        public override void Enter() { t = 0.06f; }
+        public override void Tick() { t -= Time.deltaTime; if (t <= 0) fighter.StateMachine.SetState(fighter.Idle); }
+    }
+
     public class JumpAirState : FighterStateBase {
         public JumpAirState(FighterController f) : base(f) {}
         public override string Name => "Jump";
         public override void Tick() {
-            if (fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Idle); return; }
-            var c = fighter.PendingCommands; if (Mathf.Abs(c.moveX) > 0.01f) fighter.AirMove(c.moveX);
+            if (fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Landing); return; }
+            var c = fighter.PendingCommands;
+            if (Mathf.Abs(c.moveX) > 0.01f) fighter.AirMove(c.moveX);
+            if (c.light) { fighter.StateMachine.SetState(fighter.AttackLight); return; }
+            if (c.heavy) { fighter.StateMachine.SetState(fighter.AttackHeavy); return; }
         }
     }
 
@@ -80,6 +99,30 @@ namespace Fighter.States {
         public override string Name => "Dodge";
         public override void Enter() { timer = fighter.Stats.dodgeDuration; fighter.StartDodge(); }
         public override void Tick() { timer -= Time.deltaTime; if (timer <= 0) fighter.StateMachine.SetState(fighter.Idle); }
+    }
+
+    public class DashState : FighterStateBase {
+        float t; float dir; public DashState(FighterController f) : base(f) {}
+        public override string Name => "Dash";
+        public override void Enter() { t = 0.15f; dir = fighter.facingRight ? 1f : -1f; fighter.SetAnimatorBool("Dash", true); }
+        public override void Tick() {
+            t -= Time.deltaTime;
+            fighter.AirMove(dir * 1.6f);
+            if (t <= 0) fighter.StateMachine.SetState(fighter.Idle);
+        }
+        public override void Exit() { fighter.SetAnimatorBool("Dash", false); }
+    }
+
+    public class BackdashState : FighterStateBase {
+        float t; float dir; public BackdashState(FighterController f) : base(f) {}
+        public override string Name => "Backdash";
+        public override void Enter() { t = 0.18f; dir = fighter.facingRight ? -1f : 1f; fighter.SetAnimatorBool("Backdash", true); }
+        public override void Tick() {
+            t -= Time.deltaTime;
+            fighter.AirMove(dir * 1.4f);
+            if (t <= 0) fighter.StateMachine.SetState(fighter.Idle);
+        }
+        public override void Exit() { fighter.SetAnimatorBool("Backdash", false); }
     }
 
     public class AttackState : FighterStateBase {
@@ -121,5 +164,19 @@ namespace Fighter.States {
     public class KnockdownState : FighterStateBase {
         public KnockdownState(FighterController f) : base(f){}
         public override string Name => "KO";
+    }
+
+    public class ThrowState : FighterStateBase {
+        float t; public ThrowState(FighterController f) : base(f) {}
+        public override string Name => "Throw";
+        public override void Enter() { t = 0.2f; }
+        public override void Tick() { t -= Time.deltaTime; if (t <= 0) fighter.StateMachine.SetState(fighter.Idle); }
+    }
+
+    public class WakeupState : FighterStateBase {
+        float t; public WakeupState(FighterController f) : base(f) {}
+        public override string Name => "Wakeup";
+        public override void Enter() { t = 0.3f; }
+        public override void Tick() { t -= Time.deltaTime; if (t <= 0) fighter.StateMachine.SetState(fighter.Idle); }
     }
 }

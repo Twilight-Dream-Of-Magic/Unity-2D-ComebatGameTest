@@ -1,6 +1,11 @@
 using UnityEngine;
 
 namespace Combat {
+    /// <summary>
+    /// An attack collider that becomes active during the attack's active frames. When intersecting a Hurtbox
+    /// of a different owner, it builds the effective DamageInfo (overriding with MoveData if present)
+    /// and routes the hit to the defender.
+    /// </summary>
     [RequireComponent(typeof(Collider2D))]
     public class Hitbox : MonoBehaviour {
         public Fighter.FighterController owner;
@@ -12,7 +17,7 @@ namespace Combat {
             if (col != null) col.isTrigger = true;
         }
 
-        private void OnTriggerEnter2D(Collider2D other) {
+        void TryApply(Collider2D other) {
             if (!active) return;
             var hb = other.GetComponent<Hurtbox>();
             if (hb == null) return;
@@ -27,6 +32,9 @@ namespace Combat {
             bool isPlayerHit = hb.owner.team == Fighter.FighterTeam.Player;
             Systems.HitEffectManager.Instance?.SpawnHit(pos, isPlayerHit);
         }
+
+        private void OnTriggerEnter2D(Collider2D other) { TryApply(other); }
+        private void OnTriggerStay2D(Collider2D other) { TryApply(other); }
 
         DamageInfo BuildEffectiveDamageInfo() {
             var info = damageInfo;

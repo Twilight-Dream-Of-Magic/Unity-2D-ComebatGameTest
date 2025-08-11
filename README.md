@@ -7,16 +7,16 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
 - Movement: walk, jump, crouch, auto-turn
 - Combat: light/heavy attacks, block, dodge (brief i-frames), basic combos
 - Core systems: Hitbox/Hurtbox with animation events, hit-stun, knockback, hit stop
-- UI: health bars, round timer, win/lose flow
+- UI: health bars, round timer, win/lose flow (code-driven HUD via HUDFactory)
 - Audio hooks and simple VFX placeholders
 
 ## Repo Structure
 - `Assets/` (created after opening Unity)
   - `Scripts/`
     - `Combat/`: Hitbox, Hurtbox, DamageInfo, Health
-    - `Fighter/`: FighterController, PlayerController, OpponentAIController
-    - `Systems/`: RoundManager, GameManager
-    - `UI/`: HealthBar bindings
+    - `Fighter/`: FighterController, States, Input (IInputSource, PlayerInputSource, AIInputSource, InputDriver)
+    - `Systems/`: RoundManager, GameManager, FrameClock, CameraShaker
+    - `UI/`: HUDFactory, SafeAreaClamp, Health/Meter binders, Debug HUD, MainMenuBuilder
     - `Data/`: ScriptableObjects for fighter stats and moves
   - `Art/`, `Audio/`, `Prefabs/`, `Scenes/`
 - `ProjectSettings/`, `Packages/` (Unity-generated)
@@ -29,16 +29,27 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
    - Add components: `Rigidbody2D`, `CapsuleCollider2D` (body), `Animator`
    - Add child `Hurtbox` (BoxCollider2D set as Trigger) with `Hurtbox.cs`
    - Add child `Hitboxes` empty with several BoxCollider2D children (set Trigger) + `Hitbox.cs`
-   - Attach `FighterController.cs`, `PlayerController.cs` (for player) or `OpponentAIController.cs` (for AI)
+   - Attach `FighterController.cs`, `InputDriver` and one input source:
+     - Player: `Fighter/Input/PlayerInputSource`
+     - AI: `Fighter/Input/AIInputSource`
    - Create `FighterStats` ScriptableObject and assign
    - Specials: `SpecialMoveSet` defines input sequences using direction/keys (e.g. Down, Forward, Heavy -> Super; Down, Down, Light -> Heal). `CommandQueue` default cleanup 0.25s; sequence matching uses per-entry `maxWindowSeconds` (default 0.6s).
 5) Animator: set Idle/Walk/Jump/Crouch/Block/Light/Heavy/Hit/KO. Add Animation Events to attack clips to toggle hitboxes.
-6) Create `RoundManager` in scene, link both fighters and UI sliders.
+6) In the battle scene, add `RoundManager` and call `UI/HUDFactory.Create(...)` (or use the `BattleAutoSetup` to auto-build the scene). Link returned references to `RoundManager` (`p1`, `p2`, `p1Hp`, `p2Hp`, `timerText`).
 7) Play. Use controls below.
+
+## Main Menu
+- Empty scene -> add `UI/MainMenuBuilder`. Optional: assign a `defaultBgm` AudioClip; if not assigned, no BGM will play.
+- Start Game loads `Battle` (configurable via `battleSceneName`).
+- Difficulty dropdown sets `GameManager.difficulty`.
+- Master/BGM/SFX sliders set volumes via `GameManager.Set*Volume`.
+
+## One-click Demo (for recording)
+- Empty scene -> add `Dev/DemoAutoRunner` component and press Play. It auto-generates a full battle and runs a scripted showcase (walk/jump/crouch/L-L-H/block/dodge/Super). Alternatively, set `Dev/BattleAutoSetup.demoScripted = true`.
 
 ## Controls (default)
 - Move: A/D or Left/Right
-- Jump: Space
+- Jump: Space/W/Up
 - Crouch: S or DownArrow
 - Light: J
 - Heavy: K

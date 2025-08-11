@@ -11,7 +11,8 @@ namespace Dev {
         public bool createManagers = true;
         public bool createUI = true;
         public bool createGround = true;
-        public Vector2 arenaHalfExtents = new Vector2(8f, 3f);
+        public Vector2 arenaHalfExtents = new Vector2(10f, 3.5f);
+        public bool demoScripted = false;
 
         private void Start() {
             if (createManagers) EnsureManagers();
@@ -38,6 +39,8 @@ namespace Dev {
                 if (!cam.GetComponent<CameraShaker>()) cam.AddComponent<CameraShaker>();
                 var c = cam.GetComponent<Camera>(); c.orthographic = true; c.orthographicSize = 3.5f;
                 cam.transform.position = new Vector3(0, 0, -10);
+                var fr = cam.GetComponent<Systems.CameraFramer>(); if (!fr) fr = cam.AddComponent<Systems.CameraFramer>();
+                fr.arenaHalfExtents = arenaHalfExtents;
             }
             if (!FindObjectOfType<HitEffectManager>()) new GameObject("HitEffectManager").AddComponent<HitEffectManager>();
             if (!FindObjectOfType<ComboCounter>()) new GameObject("ComboCounter").AddComponent<ComboCounter>();
@@ -46,28 +49,38 @@ namespace Dev {
         void CreateGround() {
             var g = new GameObject("Ground");
             var col = g.AddComponent<BoxCollider2D>();
-            col.size = new Vector2(arenaHalfExtents.x * 2f, 0.5f);
-            g.transform.position = new Vector3(0f, -1.5f, 0f);
+            col.size = new Vector2(arenaHalfExtents.x * 2f + 4f, 0.5f);
+            g.transform.position = new Vector3(0f, -1.8f, 0f);
             g.layer = LayerMask.NameToLayer("Default");
             var vis = new GameObject("Visual"); vis.transform.SetParent(g.transform, false);
             var sr = vis.AddComponent<SpriteRenderer>(); sr.sprite = CreateSolidSprite(new Color(0.15f, 0.6f, 0.15f, 1f));
             vis.transform.localScale = new Vector3(col.size.x, col.size.y, 1f);
 
             // add side walls to prevent falling when pushed to corners
-            float wallX = arenaHalfExtents.x;
-            float wallHeight = 6f;
+            float wallX = arenaHalfExtents.x + 2f;
+            float wallHeight = 7f;
             float wallWidth = 0.5f;
-            var left = new GameObject("WallLeft"); left.transform.position = new Vector3(-wallX - wallWidth * 0.5f, -1.0f, 0f);
+            var left = new GameObject("WallLeft"); left.transform.position = new Vector3(-wallX - wallWidth * 0.5f, -1.2f, 0f);
             var leftCol = left.AddComponent<BoxCollider2D>(); leftCol.size = new Vector2(wallWidth, wallHeight);
-            var right = new GameObject("WallRight"); right.transform.position = new Vector3(wallX + wallWidth * 0.5f, -1.0f, 0f);
+            var right = new GameObject("WallRight"); right.transform.position = new Vector3(wallX + wallWidth * 0.5f, -1.2f, 0f);
             var rightCol = right.AddComponent<BoxCollider2D>(); rightCol.size = new Vector2(wallWidth, wallHeight);
         }
 
         FighterController CreatePlayerFighter(Vector3 pos) {
             var fc = CreateFighterCore("Player", pos, new Color(0.2f, 0.6f, 1f, 1f));
             fc.team = FighterTeam.Player;
-            var ib = fc.gameObject.AddComponent<PlayerController>();
-            ib.fighter = fc;
+            // New input pipeline: PlayerInputSource + InputDriver
+            if (!demoScripted) {
+                var src = fc.gameObject.AddComponent<Fighter.InputSystem.PlayerInputSource>();
+                fc.gameObject.AddComponent<Fighter.InputSystem.InputDriver>();
+            } else {
+                var src = fc.gameObject.AddComponent<Fighter.InputSystem.ScriptedInputSource>();
+                fc.gameObject.AddComponent<Fighter.InputSystem.InputDriver>();
+                fc.meter = fc.maxMeter; // ensure enough meter for Super showcase
+            }
+            // dash resolver
+            if (!fc.gameObject.GetComponent<Combat.CommandQueue>()) fc.gameObject.AddComponent<Combat.CommandQueue>();
+            fc.gameObject.AddComponent<Fighter.InputSystem.MovementDashResolver>();
             AttachSpecials(fc);
             return fc;
         }
@@ -75,11 +88,15 @@ namespace Dev {
         FighterController CreateAIFighter(Vector3 pos) {
             var fc = CreateFighterCore("Enemy(AI)", pos, new Color(1f, 0.4f, 0.3f, 1f));
             fc.team = FighterTeam.AI;
-            var ai = fc.gameObject.AddComponent<OpponentAIController>();
-            ai.fighter = fc;
+            // New input pipeline: AIInputSource + InputDriver
+            var aiSrc = fc.gameObject.AddComponent<Fighter.InputSystem.AIInputSource>();
             var normal = ScriptableObject.CreateInstance<AIConfig>();
             normal.blockProbability = 0.2f; normal.attackCooldownRange = new Vector2(0.6f, 1.2f); normal.approachDistance = 2.2f; normal.retreatDistance = 1.0f;
-            ai.normal = normal; ai.easy = normal; ai.hard = normal;
+            aiSrc.normal = normal; aiSrc.easy = normal; aiSrc.hard = normal; aiSrc.fighter = fc;
+            fc.gameObject.AddComponent<Fighter.InputSystem.InputDriver>();
+            // dash resolver
+            if (!fc.gameObject.GetComponent<Combat.CommandQueue>()) fc.gameObject.AddComponent<Combat.CommandQueue>();
+            fc.gameObject.AddComponent<Fighter.InputSystem.MovementDashResolver>();
             AttachSpecials(fc);
             return fc;
         }
@@ -92,6 +109,11 @@ namespace Dev {
             var cap = go.AddComponent<CapsuleCollider2D>(); cap.direction = CapsuleDirection2D.Vertical; cap.size = new Vector2(0.6f, 1.8f);
 
             var fc = go.AddComponent<FighterController>();
+            // attach new core components (non-invasive, controller will delegate when present)
+            var loco = go.AddComponent<Fighter.Core.FighterLocomotion>();
+            var atk = go.AddComponent<Fighter.Core.AttackExecutor>();
+            var recv = go.AddComponent<Fighter.Core.DamageReceiver>();
+            var res = go.AddComponent<Fighter.Core.FighterResources>();
             var stats = ScriptableObject.CreateInstance<FighterStats>();
             stats.maxHealth = 100;
             stats.walkSpeed = 6f; stats.jumpForce = 12f; stats.gravityScale = 4f;
@@ -107,14 +129,14 @@ namespace Dev {
 
             // Moves (tuning: faster startup/active for snappier response)
             var light = ScriptableObject.CreateInstance<MoveData>();
-            light.moveId = "5L"; light.triggerName = "Light"; light.startup = 0.05f; light.active = 0.04f; light.recovery = 0.12f;
+            light.moveId = "Light"; light.triggerName = "Light"; light.startup = 0.05f; light.active = 0.04f; light.recovery = 0.12f;
             light.damage = 8; light.hitstun = 0.12f; light.blockstun = 0.08f; light.hitstopOnHit = 0.06f; light.hitstopOnBlock = 0.04f;
-            light.knockback = new Vector2(2.2f, 1.8f); light.pushbackOnHit = 0.35f; light.pushbackOnBlock = 0.5f; light.meterOnHit = 50; light.meterOnBlock = 20;
+            light.knockback = new Vector2(2.2f, 1.8f); light.pushbackOnHit = 0.35f; light.pushbackOnBlock = 0.5f; light.meterOnHit = 50; light.meterOnBlock = 20; light.canCancelOnHit = true; light.canCancelOnBlock = true; light.cancelIntoTriggers = new[]{"Light","Heavy","Super"};
 
             var heavy = ScriptableObject.CreateInstance<MoveData>();
-            heavy.moveId = "5H"; heavy.triggerName = "Heavy"; heavy.startup = 0.12f; heavy.active = 0.05f; heavy.recovery = 0.22f;
+             heavy.moveId = "Heavy"; heavy.triggerName = "Heavy"; heavy.startup = 0.12f; heavy.active = 0.05f; heavy.recovery = 0.22f;
             heavy.damage = 18; heavy.hitstun = 0.2f; heavy.blockstun = 0.12f; heavy.hitstopOnHit = 0.1f; heavy.hitstopOnBlock = 0.06f;
-            heavy.knockback = new Vector2(3.2f, 2.2f); heavy.pushbackOnHit = 0.9f; heavy.pushbackOnBlock = 1.0f; heavy.meterOnHit = 90; heavy.meterOnBlock = 40;
+            heavy.knockback = new Vector2(3.2f, 2.2f); heavy.pushbackOnHit = 0.9f; heavy.pushbackOnBlock = 1.0f; heavy.meterOnHit = 90; heavy.meterOnBlock = 40; heavy.canCancelOnHit = true; heavy.canCancelOnBlock = false; heavy.cancelIntoTriggers = new[]{"Super"};
 
             var set = ScriptableObject.CreateInstance<MoveSet>();
             set.entries = new MoveSet.Entry[] {
@@ -135,8 +157,8 @@ namespace Dev {
             // Hitboxes (larger and further reach to ensure contact)
             var hitRoot = new GameObject("Hitboxes"); hitRoot.transform.SetParent(go.transform, false);
             fc.hitboxes = new Hitbox[2];
-            fc.hitboxes[0] = CreateHitbox(hitRoot.transform, "Light1", new Vector2(1.3f, 0.6f), new Vector2(1.4f, 0.6f));
-            fc.hitboxes[1] = CreateHitbox(hitRoot.transform, "Heavy1", new Vector2(1.5f, 0.7f), new Vector2(1.7f, 0.7f));
+            fc.hitboxes[0] = CreateHitbox(hitRoot.transform, "Light1", new Vector2(1.1f, 0.9f), new Vector2(1.0f, 0.45f));
+            fc.hitboxes[1] = CreateHitbox(hitRoot.transform, "Heavy1", new Vector2(1.4f, 0.9f), new Vector2(1.3f, 0.5f));
             foreach (var hx in fc.hitboxes) { hx.owner = fc; hx.active = false; }
 
             return fc;
@@ -144,6 +166,8 @@ namespace Dev {
 
         void LinkOpponents(FighterController p1, FighterController p2) {
             p1.opponent = p2.transform; p2.opponent = p1.transform;
+            var fr = Camera.main ? Camera.main.GetComponent<Systems.CameraFramer>() : null;
+            if (fr) { fr.targetA = p1.transform; fr.targetB = p2.transform; }
         }
 
         Sprite CreateSolidSprite(Color c) {
@@ -169,115 +193,15 @@ namespace Dev {
         }
 
         void CreateUI(FighterController p1, FighterController p2) {
-            var canvas = CreateCanvas(out var scaler);
-            var hp1 = CreateHpSlider(canvas.transform, true);
-            var hp2 = CreateHpSlider(canvas.transform, false);
-            var meter1 = CreateMeterSlider(canvas.transform, true);
-            var meter2 = CreateMeterSlider(canvas.transform, false);
-            var timer = CreateTimer(canvas.transform);
-            var hint = CreateHint(canvas.transform);
-            BindHpAndMeter(p1, p2, hp1, hp2, meter1, meter2);
-            CreateDualDebugHud(canvas.transform, p1, p2);
-            CreateResultOverlay(canvas.transform);
-            CreateRoundManager(p1, p2, hp1, hp2, timer);
-        }
-
-        Canvas CreateCanvas(out CanvasScaler scaler) {
-            var canvasGO = new GameObject("Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-            var canvas = canvasGO.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 10;
-            scaler = canvasGO.GetComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
-            scaler.matchWidthOrHeight = 1f;
-            return canvas;
-        }
-
-        Slider CreateHpSlider(Transform root, bool left) {
-            var pos = left ? new Vector2(260, -40) : new Vector2(-260, -40);
-            var anchor = left ? new Vector2(0,1) : new Vector2(1,1);
-            var color = left ? new Color(0.2f,0.6f,1f,0.95f) : new Color(1f,0.35f,0.35f,0.95f);
-            var s = CreateSlider(root, pos, anchor, color);
-            if (!left) s.direction = Slider.Direction.RightToLeft;
-            return s;
-        }
-
-        Slider CreateMeterSlider(Transform root, bool left) {
-            var pos = left ? new Vector2(260, -80) : new Vector2(-260, -80);
-            var anchor = left ? new Vector2(0,1) : new Vector2(1,1);
-            var s = CreateSlider(root, pos, anchor, new Color(0.2f,0.8f,0.2f,0.9f));
-            if (!left) s.direction = Slider.Direction.RightToLeft;
-            return s;
-        }
-
-        Text CreateTimer(Transform root) => CreateText(root, "60", new Vector2(0, -40), new Vector2(0.5f,1), 28, TextAnchor.UpperCenter);
-        Text CreateHint(Transform root) => CreateText(root, "Move: A/D  Jump: Space  Crouch: S  Block: Left Shift  Dodge: L  Light: J  Heavy: K", new Vector2(0, 30), new Vector2(0.5f,0), 20, TextAnchor.LowerCenter);
-
-        void BindHpAndMeter(FighterController p1, FighterController p2, Slider hp1, Slider hp2, Slider m1, Slider m2) {
-            var p1Val = CreateText(hp1.transform.parent, "100", new Vector2(370, -72), new Vector2(0,1), 16, TextAnchor.UpperLeft);
-            var p2Val = CreateText(hp2.transform.parent, "100", new Vector2(-370, -72), new Vector2(1,1), 16, TextAnchor.UpperRight);
-            var p1Binder = p1Val.gameObject.AddComponent<UI.HpTextBinder>(); p1Binder.fighter = p1; p1Binder.text = p1Val;
-            var p2Binder = p2Val.gameObject.AddComponent<UI.HpTextBinder>(); p2Binder.fighter = p2; p2Binder.text = p2Val;
-            var p1Flash = hp1.gameObject.AddComponent<UI.HpFlashOnDamage>(); p1Flash.fighter = p1; p1Flash.slider = hp1; p1Flash.flashColor = Color.white;
-            var p2Flash = hp2.gameObject.AddComponent<UI.HpFlashOnDamage>(); p2Flash.fighter = p2; p2Flash.slider = hp2; p2Flash.flashColor = Color.white;
-            var eb1 = hp1.gameObject.AddComponent<UI.EnergyBarBinder>(); eb1.fighter = p1; eb1.slider = m1;
-            var eb2 = hp2.gameObject.AddComponent<UI.EnergyBarBinder>(); eb2.fighter = p2; eb2.slider = m2;
-        }
-
-        void CreateDualDebugHud(Transform root, FighterController p1, FighterController p2) {
-            var hudGO = new GameObject("DebugHUD"); var hud = hudGO.AddComponent<UI.DebugHUD>(); hud.showDetails = false;
-            var st = CreateText(root, "", new Vector2(0, -160), new Vector2(0.5f, 1), 22, TextAnchor.UpperCenter);
-            hud.stateText = st;
-            hud.fighterP1 = p1;
-            hud.fighterP2 = p2;
-            var comboText = CreateText(root, "", new Vector2(0, -130), new Vector2(0.5f,1), 34, TextAnchor.UpperCenter);
-            var comboBinder = comboText.gameObject.AddComponent<UI.ComboCounterBinder>(); comboBinder.text = comboText;
-        }
-
-        // removed old per-player status texts; merged into DebugHUD center
-
-        void CreateResultOverlay(Transform root) {
-            var txt = CreateText(root, "", new Vector2(0, -220), new Vector2(0.5f,0.5f), 48, TextAnchor.MiddleCenter);
-            var rm = FindObjectOfType<RoundManager>();
-            if (rm) rm.resultText = txt;
+            var hud = UI.HUDFactory.Create(null, p1, p2);
+            CreateRoundManager(p1, p2, hud.hp1, hud.hp2, hud.timer);
+            var rm = FindObjectOfType<Systems.RoundManager>();
+            if (rm && hud.resultText) rm.resultText = hud.resultText;
         }
 
         void CreateRoundManager(FighterController p1, FighterController p2, Slider hp1, Slider hp2, Text timer) {
             var rmGO = new GameObject("RoundManager"); var rm = rmGO.AddComponent<RoundManager>();
             rm.p1 = p1; rm.p2 = p2; rm.p1Hp = hp1; rm.p2Hp = hp2; rm.timerText = timer;
-        }
-
-        Slider CreateSlider(Transform parent, Vector2 anchoredPos, Vector2 anchor, Color fillColor) {
-            var go = new GameObject("Slider", typeof(RectTransform), typeof(Slider), typeof(Image));
-            go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>(); rt.sizeDelta = new Vector2(320, 22); rt.anchorMin = anchor; rt.anchorMax = anchor; rt.anchoredPosition = anchoredPos;
-            var bg = go.GetComponent<Image>(); bg.color = new Color(0,0,0,0.5f);
-            var fillArea = new GameObject("Fill Area", typeof(RectTransform)); fillArea.transform.SetParent(go.transform, false);
-            var fa = fillArea.GetComponent<RectTransform>(); fa.anchorMin = new Vector2(0,0.25f); fa.anchorMax = new Vector2(1,0.75f); fa.offsetMin = fa.offsetMax = Vector2.zero;
-            var fill = new GameObject("Fill", typeof(RectTransform), typeof(Image)); fill.transform.SetParent(fillArea.transform, false);
-            fill.GetComponent<Image>().color = fillColor;
-            var slider = go.GetComponent<Slider>(); slider.fillRect = fill.GetComponent<RectTransform>(); slider.minValue = 0; slider.maxValue = 1; slider.value = 1;
-            return slider;
-        }
-
-        Text CreateText(Transform parent, string content, Vector2 anchoredPos, Vector2 anchor, int fontSize = 18, TextAnchor align = TextAnchor.UpperCenter) {
-            var go = new GameObject("Text", typeof(RectTransform), typeof(Text), typeof(Outline));
-            go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>(); rt.sizeDelta = new Vector2(800, 60); rt.anchorMin = anchor; rt.anchorMax = anchor; rt.anchoredPosition = anchoredPos;
-            var t = go.GetComponent<Text>(); t.text = content; t.font = GetDefaultFont(); t.alignment = align; t.color = Color.white; t.fontSize = fontSize;
-            var outline = go.GetComponent<Outline>(); outline.effectColor = new Color(0,0,0,0.8f); outline.effectDistance = new Vector2(1.5f, -1.5f);
-            return t;
-        }
-
-        Font GetDefaultFont() {
-            Font f = null;
-            try { f = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); } catch {}
-            if (f == null) {
-                try {
-                    var names = Font.GetOSInstalledFontNames();
-                    if (names != null && names.Length > 0) f = Font.CreateDynamicFontFromOSFont(names[0], 18);
-                } catch {}
-            }
-            return f;
         }
 
         MoveData CreateSuper() {

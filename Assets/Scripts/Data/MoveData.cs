@@ -37,8 +37,12 @@ namespace Data {
         public float hitstopOnHit = 0.1f;   // 6f
         public float hitstopOnBlock = 0.066f; // 4f
 
-        [Header("Cancel Window (seconds from start)")]
-        public float cancelWindowStart = 0.0f;
-        public float cancelWindowEnd = 0.1f;
+        [Header("Cancel Rules")]
+        public bool canCancelOnHit = true;
+        public bool canCancelOnBlock = false;
+        public string[] cancelIntoTriggers; // allowed cancel targets (null/empty = allow any)
+
+        [Header("Aerial")]
+        public float landingLag = 0.06f; // added on landing if this move was used in air
     }
 }
