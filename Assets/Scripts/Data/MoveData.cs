@@ -27,6 +27,9 @@ namespace Data {
         public float pushbackOnHit = 0.4f;
         public float pushbackOnBlock = 0.6f;
 
+        [Header("Knockdown")]
+        public KnockdownKind knockdownKind = KnockdownKind.None;
+
         [Header("Hit Properties")]
         public HitLevel hitLevel = HitLevel.Mid;
         public HitType hitType = HitType.Strike;
@@ -40,6 +43,10 @@ namespace Data {
         [Header("Cancel Rules")]
         public bool canCancelOnHit = true;
         public bool canCancelOnBlock = false;
+        public bool canCancelOnWhiff = false;
+        [Tooltip("Cancel window when move hits: [start,end] in seconds from attack start")] public Vector2 onHitCancelWindow = new Vector2(0.0f, 0.25f);
+        [Tooltip("Cancel window when move is blocked: [start,end] in seconds from attack start")] public Vector2 onBlockCancelWindow = new Vector2(0.0f, 0.18f);
+        [Tooltip("Cancel window when move whiffs: [start,end] in seconds from attack start")] public Vector2 onWhiffCancelWindow = new Vector2(0.0f, 0.12f);
         public string[] cancelIntoTriggers; // allowed cancel targets (null/empty = allow any)
 
         [Header("Aerial")]

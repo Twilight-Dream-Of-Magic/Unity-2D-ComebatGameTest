@@ -30,11 +30,18 @@ namespace Fighter.Core {
             if (!res.wasBlocked) {
                 var rb = fighter.rb; rb.velocity = new Vector2(dir * info.knockback.x, info.knockback.y);
                 if (AnimatorReady()) animator.SetTrigger("Hit");
-                fighter.Hitstun.Begin(res.appliedStun);
-                fighter.StateMachine.SetState(fighter.Hitstun);
+                if (info.knockdownKind == Combat.KnockdownKind.Soft || info.knockdownKind == Combat.KnockdownKind.Hard) {
+                    float downDur = info.knockdownKind == Combat.KnockdownKind.Hard ? 1.0f : 0.6f;
+                    fighter.Downed.Begin(info.knockdownKind == Combat.KnockdownKind.Hard, downDur);
+                    fighter.StateMachine.SetState(fighter.Downed);
+                } else {
+                    fighter.Hitstun.Begin(res.appliedStun);
+                    fighter.StateMachine.SetState(fighter.Hitstun);
+                }
 
                 // attacker feedback
                 attacker.OnHitConfirmedLocal(res.appliedHitstop);
+                attacker.MarkHitConfirmed();
                 attacker.AddMeter(attacker.CurrentMove ? attacker.CurrentMove.meterOnHit : 20);
                 attacker.AddExternalImpulse(-dir * res.appliedPushback);
                 // victim feedback

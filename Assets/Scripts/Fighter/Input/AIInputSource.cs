@@ -4,8 +4,8 @@ using Systems;
 
 namespace Fighter.InputSystem {
     /// <summary>
-    /// AI implementation of IInputSource. Encapsulates the previous OpponentAIController logic to produce
-    /// approach/retreat/block/attack intents and enqueues special/attack tokens.
+    /// Smarter AI implementation of IInputSource. Produces approach/retreat/block/attack, plus dodge on threat,
+    /// okizeme pressure, anti-air, and whiff punish behavior.
     /// </summary>
     public class AIInputSource : MonoBehaviour, IInputSource {
         public FighterController fighter;
@@ -29,6 +29,7 @@ namespace Fighter.InputSystem {
         public float jumpCooldown = 1.8f;
         public float jumpProbability = 0.25f;
         public float antiAirRange = 1.6f;
+        public float dodgeProbability = 0.4f;
 
         float attackCd;
         float stateTimer;
@@ -37,8 +38,9 @@ namespace Fighter.InputSystem {
         float retreatTimer;
         float smoothedMoveX;
         float jumpCd;
+        float dodgeCd;
 
-        enum AIState { Approach, Attack, Retreat, EvadeBlock }
+        enum AIState { Approach, Attack, Retreat, EvadeBlock, EvadeDodge, WhiffPunish, Okizeme }
         AIState state = AIState.Approach;
 
         CommandQueue commandQueue;
@@ -71,16 +73,22 @@ namespace Fighter.InputSystem {
             float dist = Mathf.Abs(dx);
             bool oppThreat = opp && opp.debugHitActive && Random.value < reactBlockProbability;
             bool oppAir = opp && !opp.IsGrounded();
+            bool oppWhiff = opp && !opp.debugHitActive && Random.value < 0.25f; // cheap whiff sense
 
             stateTimer += Time.deltaTime;
             blockHold = Mathf.Max(0f, blockHold - Time.deltaTime);
             specialCd = Mathf.Max(0f, specialCd - Time.deltaTime);
             retreatTimer = Mathf.Max(0f, retreatTimer - Time.deltaTime);
             jumpCd = Mathf.Max(0f, jumpCd - Time.deltaTime);
+            dodgeCd = Mathf.Max(0f, dodgeCd - Time.deltaTime);
 
             if (stateTimer >= minStateTime) {
                 var next = state;
-                if (oppThreat && blockHold <= 0f) { next = AIState.EvadeBlock; }
+                if (oppThreat && blockHold <= 0f) {
+                    // prefer dodge sometimes
+                    if (Random.value < dodgeProbability && dodgeCd <= 0f && fighter.IsGrounded()) next = AIState.EvadeDodge; else next = AIState.EvadeBlock;
+                }
+                else if (oppWhiff && dist <= attackRange * 1.2f) next = AIState.WhiffPunish;
                 else if (dist <= attackRange) next = AIState.Attack;
                 else if (dist >= disengageDistance) next = AIState.Approach;
                 else if (dist > attackRange && dist < engageDistance) next = AIState.Approach;
@@ -97,54 +105,63 @@ namespace Fighter.InputSystem {
             bool canSuper = (specialCd <= 0f) && fighter.meter >= 500;
             float sSuper = ScoreSuper(canSuper, dist);
 
-            // pick best
-            float best = 0f; int choice = 0; // 1 approach,2 retreat,3 jump,4 AA,5 press,6 super
-            void Pick(float s, int id) { if (s > best) { best = s; choice = id; } }
-            Pick(sApproach,1); Pick(sRetreat,2); Pick(sJump,3); Pick(sAA,4); Pick(sPress,5); Pick(sSuper,6);
+            // hit-confirm super
+            if (fighter.HasRecentHitConfirm() && canSuper) {
+                QueueSuper(dx);
+                specialCd = specialCooldown;
+            }
 
             var c = new FighterCommands();
             float targetMoveX = 0f;
-            switch (choice) {
-                case 1: targetMoveX = Mathf.Sign(dx); break;
-                case 2: targetMoveX = -Mathf.Sign(dx); if (retreatTimer <= 0f) retreatTimer = retreatHold; break;
-                case 3: if (jumpCd <= 0f && fighter.CanJump()) { wantJump = true; jumpCd = jumpCooldown; } break;
-                case 4: // simple anti-air: stand Heavy
-                    commandQueue.Enqueue(CommandToken.Heavy); attackCd = 0.4f; break;
-                case 5: // pressure string
-                    if (attackCd <= 0) { commandQueue.Enqueue(Random.value < 0.6f ? CommandToken.Light : CommandToken.Heavy); attackCd = Random.Range(0.4f,0.7f); }
-                    targetMoveX = (dist > attackRange*0.8f) ? Mathf.Sign(dx) * microStepSpeed : 0f;
-                    break;
-                case 6: // super
-                    commandQueue.Enqueue(CommandToken.Down);
-                    commandQueue.Enqueue(Mathf.Sign(dx) > 0 ? CommandToken.Forward : CommandToken.Back);
-                    commandQueue.Enqueue(CommandToken.Heavy);
-                    specialCd = specialCooldown;
-                    break;
-                default:
+
+            switch (state) {
+                case AIState.Approach:
                     targetMoveX = Mathf.Sign(dx);
+                    if (Random.value < jumpProbability && jumpCd <= 0f && fighter.CanJump()) { c.jump = true; jumpCd = jumpCooldown; }
+                    break;
+                case AIState.Retreat:
+                    targetMoveX = -Mathf.Sign(dx); if (retreatTimer <= 0f) retreatTimer = retreatHold; break;
+                case AIState.EvadeBlock:
+                    c.block = true; blockHold = minBlockHold; break;
+                case AIState.EvadeDodge:
+                    c.dodge = true; dodgeCd = 2.0f; break;
+                case AIState.WhiffPunish:
+                    commandQueue.Enqueue(CommandToken.Heavy); attackCd = 0.5f; break;
+                case AIState.Okizeme:
+                    // simple: micro step + Light
+                    if (attackCd <= 0f) { commandQueue.Enqueue(CommandToken.Light); attackCd = Random.Range(0.3f,0.6f); }
+                    targetMoveX = (dist > attackRange*0.7f) ? Mathf.Sign(dx) * microStepSpeed : 0f;
+                    break;
+                case AIState.Attack:
+                    if (attackCd <= 0f) { commandQueue.Enqueue(Random.value < 0.65f ? CommandToken.Light : CommandToken.Heavy); attackCd = Random.Range(0.4f,0.7f); }
+                    targetMoveX = (dist > attackRange*0.8f) ? Mathf.Sign(dx) * microStepSpeed : 0f;
                     break;
             }
 
+            // anti-air opportunistically
+            if (oppAir && dist < antiAirRange && attackCd <= 0f) { commandQueue.Enqueue(CommandToken.Heavy); attackCd = 0.5f; }
+
             // smooth movement to avoid jitter
             smoothedMoveX = Mathf.MoveTowards(smoothedMoveX, targetMoveX, moveSmooth * Time.deltaTime);
-            // hold retreat a bit to avoid spam switching
             if (state == AIState.Retreat && retreatTimer > 0f) smoothedMoveX = -Mathf.Sign(dx);
             c.moveX = smoothedMoveX;
-            if (wantJump) c.jump = true;
 
             if (attackCd > 0) attackCd -= Time.deltaTime;
             commands = c;
             return true;
         }
 
-        bool wantJump;
+        void QueueSuper(float dx) {
+            commandQueue.Enqueue(CommandToken.Down);
+            commandQueue.Enqueue(Mathf.Sign(dx) > 0 ? CommandToken.Forward : CommandToken.Back);
+            commandQueue.Enqueue(CommandToken.Heavy);
+        }
 
         float ScoreApproach(float dist) => Mathf.Clamp01((dist - attackRange) / (disengageDistance - attackRange));
-        float ScoreRetreat(float dist) => Mathf.Clamp01((attackRange - dist) / attackRange) * (blockHold > 0 ? 0.5f : 0.2f);
+        float ScoreRetreat(float dist) => Mathf.Clamp01((attackRange - dist) / attackRange) * 0.2f;
         float ScoreJumpIn(bool oppAir, float dist) => (jumpCd <= 0 && !oppAir && dist > attackRange * 0.9f) ? 0.4f : 0f;
         float ScoreAntiAir(bool oppAir, float dist) => (oppAir && dist < antiAirRange) ? 0.8f : 0f;
         float ScorePressure(bool oppThreat, float dist) => (!oppThreat && dist <= attackRange) ? 0.7f : 0.2f;
-        float ScoreDefense(bool oppThreat) => oppThreat ? 0.6f : 0.1f;
         float ScoreSuper(bool can, float dist) => can && dist <= attackRange ? 0.9f : 0f;
     }
 }

@@ -11,7 +11,7 @@ namespace Dev {
         public bool createManagers = true;
         public bool createUI = true;
         public bool createGround = true;
-        public Vector2 arenaHalfExtents = new Vector2(10f, 3.5f);
+        public Vector2 arenaHalfExtents = new Vector2(256f, 3.5f);
         public bool demoScripted = false;
 
         private void Start() {
@@ -21,6 +21,8 @@ namespace Dev {
             var p2 = CreateAIFighter(new Vector3(1.6f, -1f, 0f));
             LinkOpponents(p1, p2);
             if (createUI) CreateUI(p1, p2);
+            // attach simple Dev panel for MoveData tuning on P1
+            if (!p1.GetComponent<Dev.MoveDataDevPanel>()) p1.gameObject.AddComponent<Dev.MoveDataDevPanel>();
             Debug.Log("BattleAutoSetup ready: A/D move, Space jump, S crouch, J/K attack, Shift block, L dodge");
         }
 
@@ -49,15 +51,15 @@ namespace Dev {
         void CreateGround() {
             var g = new GameObject("Ground");
             var col = g.AddComponent<BoxCollider2D>();
-            col.size = new Vector2(arenaHalfExtents.x * 2f + 4f, 0.5f);
+            col.size = new Vector2(512f, 0.5f);
             g.transform.position = new Vector3(0f, -1.8f, 0f);
             g.layer = LayerMask.NameToLayer("Default");
             var vis = new GameObject("Visual"); vis.transform.SetParent(g.transform, false);
             var sr = vis.AddComponent<SpriteRenderer>(); sr.sprite = CreateSolidSprite(new Color(0.15f, 0.6f, 0.15f, 1f));
             vis.transform.localScale = new Vector3(col.size.x, col.size.y, 1f);
 
-            // add side walls to prevent falling when pushed to corners
-            float wallX = arenaHalfExtents.x + 2f;
+            // side walls
+            float wallX = 256f + 2f;
             float wallHeight = 7f;
             float wallWidth = 0.5f;
             var left = new GameObject("WallLeft"); left.transform.position = new Vector3(-wallX - wallWidth * 0.5f, -1.2f, 0f);
@@ -131,12 +133,12 @@ namespace Dev {
             var light = ScriptableObject.CreateInstance<MoveData>();
             light.moveId = "Light"; light.triggerName = "Light"; light.startup = 0.05f; light.active = 0.04f; light.recovery = 0.12f;
             light.damage = 8; light.hitstun = 0.12f; light.blockstun = 0.08f; light.hitstopOnHit = 0.06f; light.hitstopOnBlock = 0.04f;
-            light.knockback = new Vector2(2.2f, 1.8f); light.pushbackOnHit = 0.35f; light.pushbackOnBlock = 0.5f; light.meterOnHit = 50; light.meterOnBlock = 20; light.canCancelOnHit = true; light.canCancelOnBlock = true; light.cancelIntoTriggers = new[]{"Light","Heavy","Super"};
+            light.knockback = new Vector2(2.2f, 1.8f); light.pushbackOnHit = 0.35f; light.pushbackOnBlock = 0.5f; light.meterOnHit = 50; light.meterOnBlock = 20; light.canCancelOnHit = true; light.canCancelOnBlock = true; light.canCancelOnWhiff = true; light.onWhiffCancelWindow = new Vector2(0.0f, 0.12f); light.onHitCancelWindow = new Vector2(0.0f, 0.25f); light.onBlockCancelWindow = new Vector2(0.0f, 0.18f); light.cancelIntoTriggers = new[]{"Light","Heavy","Super"};
 
             var heavy = ScriptableObject.CreateInstance<MoveData>();
              heavy.moveId = "Heavy"; heavy.triggerName = "Heavy"; heavy.startup = 0.12f; heavy.active = 0.05f; heavy.recovery = 0.22f;
             heavy.damage = 18; heavy.hitstun = 0.2f; heavy.blockstun = 0.12f; heavy.hitstopOnHit = 0.1f; heavy.hitstopOnBlock = 0.06f;
-            heavy.knockback = new Vector2(3.2f, 2.2f); heavy.pushbackOnHit = 0.9f; heavy.pushbackOnBlock = 1.0f; heavy.meterOnHit = 90; heavy.meterOnBlock = 40; heavy.canCancelOnHit = true; heavy.canCancelOnBlock = false; heavy.cancelIntoTriggers = new[]{"Super"};
+            heavy.knockback = new Vector2(3.2f, 2.2f); heavy.pushbackOnHit = 0.9f; heavy.pushbackOnBlock = 1.0f; heavy.meterOnHit = 90; heavy.meterOnBlock = 40; heavy.canCancelOnHit = true; heavy.canCancelOnBlock = false; heavy.knockdownKind = Combat.KnockdownKind.Soft; heavy.cancelIntoTriggers = new[]{"Super"};
 
             var set = ScriptableObject.CreateInstance<MoveSet>();
             set.entries = new MoveSet.Entry[] {
@@ -167,7 +169,17 @@ namespace Dev {
         void LinkOpponents(FighterController p1, FighterController p2) {
             p1.opponent = p2.transform; p2.opponent = p1.transform;
             var fr = Camera.main ? Camera.main.GetComponent<Systems.CameraFramer>() : null;
-            if (fr) { fr.targetA = p1.transform; fr.targetB = p2.transform; }
+            if (fr) { fr.targetA = p1.transform; fr.targetB = p2.transform; fr.arenaHalfExtents = arenaHalfExtents; }
+            // Ensure pushboxes
+            if (!p1.GetComponent<Combat.Pushbox>()) p1.gameObject.AddComponent<Combat.Pushbox>();
+            if (!p2.GetComponent<Combat.Pushbox>()) p2.gameObject.AddComponent<Combat.Pushbox>();
+            // Set posture flags for hurtboxes (simple defaults)
+            foreach (var hb in p1.GetComponentsInChildren<Combat.Hurtbox>(true)) { hb.activeStanding = true; hb.activeCrouching = hb.region != Combat.HurtRegion.Head; hb.activeAirborne = hb.region != Combat.HurtRegion.Legs; }
+            foreach (var hb in p2.GetComponentsInChildren<Combat.Hurtbox>(true)) { hb.activeStanding = true; hb.activeCrouching = hb.region != Combat.HurtRegion.Head; hb.activeAirborne = hb.region != Combat.HurtRegion.Legs; }
+
+            // UI hints
+            var hints = GameObject.FindObjectOfType<UI.ControlsHintBinder>();
+            if (hints) { hints.showWakeupTip = true; hints.showTechTip = true; }
         }
 
         Sprite CreateSolidSprite(Color c) {
@@ -234,6 +246,42 @@ namespace Dev {
             };
             var resolver = fc.gameObject.AddComponent<Fighter.SpecialInputResolver>();
             resolver.fighter = fc; resolver.specialSet = set;
+        }
+    }
+
+    public class MoveDataDevPanel : MonoBehaviour {
+        public Fighter.FighterController fighter;
+        public string targetTrigger = "Light";
+        public MoveData runtime;
+        void Start() { if (!fighter) fighter = GetComponent<Fighter.FighterController>(); if (fighter && fighter.moveSet) runtime = fighter.moveSet.Get(targetTrigger); }
+        void OnGUI() {
+            if (!runtime) return;
+            GUILayout.BeginArea(new Rect(20, 80, 320, 360), GUI.skin.box);
+            GUILayout.Label($"Dev: {targetTrigger}");
+            runtime.startup = Slider("Startup", runtime.startup, 0.02f, 0.3f);
+            runtime.active = Slider("Active", runtime.active, 0.02f, 0.2f);
+            runtime.recovery = Slider("Recovery", runtime.recovery, 0.02f, 0.5f);
+            runtime.damage = (int)Slider("Damage", runtime.damage, 0, 50);
+            runtime.hitstun = Slider("Hitstun", runtime.hitstun, 0.02f, 0.5f);
+            runtime.blockstun = Slider("Blockstun", runtime.blockstun, 0.02f, 0.5f);
+            GUILayout.Space(6);
+            GUILayout.Label("Cancel Windows (sec)");
+            runtime.canCancelOnWhiff = GUILayout.Toggle(runtime.canCancelOnWhiff, "Whiff Cancel");
+            runtime.onWhiffCancelWindow = Vec2("Whiff [s,e]", runtime.onWhiffCancelWindow, 0f, 0.6f);
+            runtime.onHitCancelWindow = Vec2("OnHit [s,e]", runtime.onHitCancelWindow, 0f, 0.6f);
+            runtime.onBlockCancelWindow = Vec2("OnBlock [s,e]", runtime.onBlockCancelWindow, 0f, 0.6f);
+            GUILayout.Space(6);
+            GUILayout.Label("KnockdownKind");
+            runtime.knockdownKind = (Combat.KnockdownKind)GUILayout.SelectionGrid((int)runtime.knockdownKind, new []{"None","Soft","Hard"}, 3);
+            GUILayout.EndArea();
+        }
+        float Slider(string label, float v, float min, float max) { GUILayout.Label($"{label}: {v:F2}"); return GUILayout.HorizontalSlider(v, min, max); }
+        int Slider(string label, int v, int min, int max) { GUILayout.Label($"{label}: {v}"); return Mathf.RoundToInt(GUILayout.HorizontalSlider(v, min, max)); }
+        Vector2 Vec2(string label, Vector2 v, float min, float max) {
+            GUILayout.Label($"{label}: [{v.x:F2},{v.y:F2}]");
+            float a = GUILayout.HorizontalSlider(v.x, min, max);
+            float b = GUILayout.HorizontalSlider(v.y, min, max);
+            if (b < a) b = a; return new Vector2(a,b);
         }
     }
 }

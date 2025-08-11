@@ -23,8 +23,8 @@ namespace Fighter.States {
             if (c.block && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Block); return; }
             if (c.dodge && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Dodge); return; }
             if (c.crouch && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Crouch); return; }
-            if (c.jump && fighter.CanJump()) { fighter.DoJump(); fighter.StateMachine.SetState(fighter.PreJump); return; }
-            if (c.light) { fighter.StateMachine.SetState(fighter.AttackLight); return; }
+            if ((c.jump && fighter.CanJump()) || (fighter.GetComponent<JumpRule>()?.ShouldConsumeBufferedJump(fighter.IsGrounded()) ?? false)) { fighter.DoJump(); fighter.StateMachine.SetState(fighter.PreJump); return; }
+            if (c.light) { if (fighter.IsOpponentInThrowRange(1.0f)) { fighter.StateMachine.SetState(fighter.Throw); return; } fighter.StateMachine.SetState(fighter.AttackLight); return; }
             if (c.heavy) { fighter.StateMachine.SetState(fighter.AttackHeavy); return; }
             if (HasMoveInput(out float x)) fighter.Move(x); else fighter.HaltHorizontal();
         }
@@ -40,8 +40,8 @@ namespace Fighter.States {
             if (c.block && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Block); return; }
             if (c.dodge && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Dodge); return; }
             if (c.crouch && fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Crouch); return; }
-            if (c.jump && fighter.CanJump()) { fighter.DoJump(); fighter.StateMachine.SetState(fighter.PreJump); return; }
-            if (c.light) { fighter.StateMachine.SetState(fighter.AttackLight); return; }
+            if ((c.jump && fighter.CanJump()) || (fighter.GetComponent<JumpRule>()?.ShouldConsumeBufferedJump(fighter.IsGrounded()) ?? false)) { fighter.DoJump(); fighter.StateMachine.SetState(fighter.PreJump); return; }
+            if (c.light) { if (fighter.IsOpponentInThrowRange(1.0f)) { fighter.StateMachine.SetState(fighter.Throw); return; } fighter.StateMachine.SetState(fighter.AttackLight); return; }
             if (c.heavy) { fighter.StateMachine.SetState(fighter.AttackHeavy); return; }
             fighter.Move(x);
         }
@@ -54,7 +54,7 @@ namespace Fighter.States {
         public override void Tick() {
             var c = fighter.PendingCommands;
             if (!c.crouch) { fighter.StateMachine.SetState(fighter.Idle); return; }
-            if (c.light) { fighter.StateMachine.SetState(fighter.AttackLight); return; }
+            if (c.light) { if (fighter.IsOpponentInThrowRange(1.0f)) { fighter.StateMachine.SetState(fighter.Throw); return; } fighter.StateMachine.SetState(fighter.AttackLight); return; }
             if (c.heavy) { fighter.StateMachine.SetState(fighter.AttackHeavy); return; }
         }
         public override void Exit() { fighter.IsCrouching = false; fighter.SetAnimatorBool("Crouch", false); }
@@ -81,6 +81,8 @@ namespace Fighter.States {
             if (fighter.IsGrounded()) { fighter.StateMachine.SetState(fighter.Landing); return; }
             var c = fighter.PendingCommands;
             if (Mathf.Abs(c.moveX) > 0.01f) fighter.AirMove(c.moveX);
+            var rule = fighter.GetComponent<JumpRule>();
+            if ((c.jump && fighter.CanJump()) || (rule != null && rule.ShouldConsumeBufferedJump(false))) { fighter.DoJump(); return; }
             if (c.light) { fighter.StateMachine.SetState(fighter.AttackLight); return; }
             if (c.heavy) { fighter.StateMachine.SetState(fighter.AttackHeavy); return; }
         }
@@ -128,6 +130,7 @@ namespace Fighter.States {
     public class AttackState : FighterStateBase {
         readonly string trigger;
         float startup, active, recovery; float t; enum Phase { Startup, Active, Recovery } Phase phase;
+        float elapsedFromStart;
         public AttackState(FighterController f, string trig) : base(f) { trigger = trig; }
         public override string Name => "Attack-" + trigger;
         public override void Enter() {
@@ -136,21 +139,36 @@ namespace Fighter.States {
             active = md ? md.active : 0.06f;
             recovery = md ? md.recovery : 0.18f;
             t = 0; phase = Phase.Startup; fighter.TriggerAttack(trigger);
+            elapsedFromStart = 0f;
         }
         public override void Tick() {
             t += Time.deltaTime;
+            elapsedFromStart += Time.deltaTime;
             switch (phase) {
                 case Phase.Startup:
                     if (t >= startup) { phase = Phase.Active; t = 0; fighter.SetAttackActive(true);} break;
                 case Phase.Active:
-                    if (fighter.TryConsumeComboCancel(out string to)) { fighter.TriggerAttack(to); phase = Phase.Startup; t = 0; }
+                    if (AllowCancelNow(onWhiff:true) && fighter.TryConsumeComboCancel(out string to)) { fighter.TriggerAttack(to); phase = Phase.Startup; t = 0; elapsedFromStart = 0f; }
                     else if (t >= active) { phase = Phase.Recovery; t = 0; fighter.SetAttackActive(false);} break;
                 case Phase.Recovery:
-                    if (fighter.TryConsumeComboCancel(out string to2)) { fighter.TriggerAttack(to2); phase = Phase.Startup; t = 0; }
+                    if (AllowCancelNow(onWhiff:false) && fighter.TryConsumeComboCancel(out string to2)) { fighter.TriggerAttack(to2); phase = Phase.Startup; t = 0; elapsedFromStart = 0f; }
                     else if (t >= recovery) { fighter.ClearCurrentMove(); fighter.StateMachine.SetState(fighter.Idle);} break;
             }
         }
         public override void Exit() { fighter.SetAttackActive(false); fighter.ClearCurrentMove(); }
+
+        bool AllowCancelNow(bool onWhiff) {
+            var md = fighter.CurrentMove;
+            if (md == null) return false;
+            if (onWhiff) {
+                if (!md.canCancelOnWhiff) return false;
+                return elapsedFromStart >= md.onWhiffCancelWindow.x && elapsedFromStart <= md.onWhiffCancelWindow.y;
+            }
+            // On hit/block: gates由 DamageReceiver 在命中/格挡时触发 RequestComboCancel 决定，窗口在此兜底检查
+            if (md.canCancelOnHit && elapsedFromStart >= md.onHitCancelWindow.x && elapsedFromStart <= md.onHitCancelWindow.y) return true;
+            if (md.canCancelOnBlock && elapsedFromStart >= md.onBlockCancelWindow.x && elapsedFromStart <= md.onBlockCancelWindow.y) return true;
+            return false;
+        }
     }
 
     public class HitstunState : FighterStateBase {
@@ -169,14 +187,63 @@ namespace Fighter.States {
     public class ThrowState : FighterStateBase {
         float t; public ThrowState(FighterController f) : base(f) {}
         public override string Name => "Throw";
-        public override void Enter() { t = 0.2f; }
-        public override void Tick() { t -= Time.deltaTime; if (t <= 0) fighter.StateMachine.SetState(fighter.Idle); }
+        public override void Enter() { t = 0.15f; fighter.SetAnimatorBool("Throw", true); }
+        public override void Tick() {
+            t -= Time.deltaTime;
+            if (t <= 0) {
+                // simple connect: if close enough, open tech window for victim; resolve tech or apply
+                var opp = fighter.opponent ? fighter.opponent.GetComponent<FighterController>() : null;
+                if (opp && fighter.IsOpponentInThrowRange(1.0f)) {
+                    opp.StartThrowTechWindow(0.25f);
+                    // brief wait frame equivalent
+                    if (!opp.WasTechTriggeredAndClear()) {
+                        fighter.ApplyThrowOn(opp);
+                    }
+                }
+                fighter.SetAnimatorBool("Throw", false);
+                fighter.StateMachine.SetState(fighter.Idle);
+            }
+        }
     }
 
     public class WakeupState : FighterStateBase {
         float t; public WakeupState(FighterController f) : base(f) {}
         public override string Name => "Wakeup";
-        public override void Enter() { t = 0.3f; }
-        public override void Tick() { t -= Time.deltaTime; if (t <= 0) fighter.StateMachine.SetState(fighter.Idle); }
+        public override void Enter() {
+            t = fighter.stats != null ? fighter.stats.wakeupInvuln : 0.25f;
+            fighter.SetUpperLowerInvuln(true, true);
+            if (fighter.animator && fighter.animator.runtimeAnimatorController) fighter.animator.SetTrigger("Wakeup");
+        }
+        public override void Tick() {
+            t -= Time.deltaTime;
+            // direction decision during first half: allow position adjustment
+            var c = fighter.PendingCommands;
+            if (t > 0.5f * (fighter.stats != null ? fighter.stats.wakeupInvuln : 0.25f)) {
+                float dir = 0f;
+                if (c.moveX > 0.4f) dir = fighter.facingRight ? 1f : -1f; // forward roll
+                else if (c.moveX < -0.4f) dir = fighter.facingRight ? -1f : 1f; // backrise
+                if (Mathf.Abs(dir) > 0.1f) fighter.AddExternalImpulse(dir * 0.12f);
+            }
+            if (t <= 0) { fighter.SetUpperLowerInvuln(false, false); fighter.StateMachine.SetState(fighter.Idle); }
+        }
+    }
+
+    // New: Downed state to represent soft/hard knockdown and route to wakeup options
+    public class DownedState : FighterStateBase {
+        float downTime;
+        bool hard;
+        public DownedState(FighterController f) : base(f) {}
+        public override string Name => hard ? "Downed(Hard)" : "Downed(Soft)";
+        public void Begin(bool isHard, float duration) { hard = isHard; downTime = duration; }
+        public override void Enter() { fighter.SetAnimatorBool("Downed", true); }
+        public override void Tick() {
+            downTime -= Time.deltaTime;
+            if (downTime <= 0f) {
+                // simple wakeup: 原地或后退起身，按住后方向可后起；按住前方向可前滚（后续可扩展）
+                var c = fighter.PendingCommands;
+                fighter.StateMachine.SetState(fighter.Wakeup);
+            }
+        }
+        public override void Exit() { fighter.SetAnimatorBool("Downed", false); }
     }
 }

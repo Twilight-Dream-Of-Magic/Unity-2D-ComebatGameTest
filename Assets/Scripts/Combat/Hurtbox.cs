@@ -16,6 +16,11 @@ namespace Combat {
         /// <summary>Latched by FighterController each frame to enable/disable this region for hit testing.</summary>
         public bool enabledThisFrame = true;
 
+        [Header("Posture Activation")]
+        public bool activeStanding = true;
+        public bool activeCrouching = true;
+        public bool activeAirborne = true;
+
         private void Reset() {
             var col = GetComponent<Collider2D>();
             if (col != null) col.isTrigger = true;

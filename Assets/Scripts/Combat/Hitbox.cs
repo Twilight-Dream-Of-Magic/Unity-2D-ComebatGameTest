@@ -52,6 +52,7 @@ namespace Combat {
                 info.hitstopOnBlock = md.hitstopOnBlock;
                 info.pushbackOnHit = md.pushbackOnHit;
                 info.pushbackOnBlock = md.pushbackOnBlock;
+                info.knockdownKind = md.knockdownKind;
             }
             return info;
         }

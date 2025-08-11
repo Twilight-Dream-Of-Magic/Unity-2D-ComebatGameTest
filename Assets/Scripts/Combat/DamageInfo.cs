@@ -7,6 +7,7 @@ namespace Combat {
     /// </summary>
     public enum HitLevel { High, Mid, Low, Overhead }
     public enum HitType { Strike, Projectile, Throw }
+    public enum KnockdownKind { None, Soft, Hard }
 
     [System.Serializable]
     public struct DamageInfo {
@@ -23,6 +24,9 @@ namespace Combat {
         public Vector2 knockback;
         public float pushbackOnHit;
         public float pushbackOnBlock;
+
+        [Header("Knockdown")]
+        public KnockdownKind knockdownKind;
 
         [Header("Hit-Stop (seconds)")]
         public float hitstopOnHit;

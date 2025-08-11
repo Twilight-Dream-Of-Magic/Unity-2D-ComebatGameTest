@@ -33,6 +33,7 @@ namespace Fighter {
     }
 
     [RequireComponent(typeof(Rigidbody2D))]
+    [DefaultExecutionOrder(50)]
     public class FighterController : MonoBehaviour {
         [Header("Refs")]
         /// <summary>Core character stat block (HP, speeds, gravity, chip ratio, dodge durations).</summary>
@@ -87,6 +88,9 @@ namespace Fighter {
         /// <summary>Finite state machine controlling fighter behavior.</summary>
         public StateMachine StateMachine { get; private set; }
 
+        /// <summary>Called by inputs (player/AI) to provide the command snapshot for this frame.</summary>
+        public void SetCommands(in FighterCommands cmd) { PendingCommands = cmd; }
+
         /// <summary>State singleton instances created at Awake.</summary>
         public IdleState Idle { get; private set; }
         public WalkState Walk { get; private set; }
@@ -104,6 +108,7 @@ namespace Fighter {
         public States.BackdashState Backdash { get; private set; }
         public States.ThrowState Throw { get; private set; }
         public States.WakeupState Wakeup { get; private set; }
+        public States.DownedState Downed { get; private set; }
 
         public FighterStats Stats => stats;
 
@@ -123,7 +128,15 @@ namespace Fighter {
         readonly HashSet<FighterController> hitVictims = new HashSet<FighterController>();
         bool hitStopApplied;
 
-        int jumpsUsed;
+        // hit confirm helper (for AI/meter cancel decisions)
+        float hitConfirmTimer;
+
+        // throw/tech windows
+        float throwTechWindow;
+        float ukemiWindow;
+        bool techTriggered;
+
+        JumpRule jumpRule;
         bool dashRequested; bool dashBack;
 
         private void Awake() {
@@ -139,6 +152,9 @@ namespace Fighter {
 
             if (hurtboxes != null) foreach (var h in hurtboxes) if (h != null) h.owner = this;
             if (hitboxes != null) foreach (var h in hitboxes) if (h != null) h.owner = this;
+
+            jumpRule = GetComponent<JumpRule>();
+            if (!jumpRule) jumpRule = gameObject.AddComponent<JumpRule>();
 
             StateMachine = new StateMachine();
             Idle = new IdleState(this);
@@ -157,6 +173,7 @@ namespace Fighter {
             Backdash = new States.BackdashState(this);
             Throw = new States.ThrowState(this);
             Wakeup = new States.WakeupState(this);
+            Downed = new States.DownedState(this);
         }
 
         /// <summary>
@@ -168,14 +185,35 @@ namespace Fighter {
 
         private void Start() { StateMachine.SetState(Idle); }
 
+        // Animator Event hooks (to be called from throw animations)
+        public void AE_ThrowStart() { /* placeholder for throw windup */ }
+        public void AE_ThrowConnect() { /* on connect, apply throw on target if in range */ if (opponent) { var vic = opponent.GetComponent<FighterController>(); ApplyThrowOn(vic); StartThrowTechWindow(0.25f); } }
+        public void AE_ThrowEnd() { /* end of throw */ }
+
+        public void StartThrowTechWindow(float seconds) { throwTechWindow = Mathf.Max(throwTechWindow, seconds); }
+        public bool CanTechThrow() { return throwTechWindow > 0f; }
+        public void ConsumeTech() { throwTechWindow = 0f; techTriggered = true; }
+        public bool WasTechTriggeredAndClear() { bool t = techTriggered; techTriggered = false; return t; }
+
+        public void StartUkemiWindow(float seconds) { ukemiWindow = Mathf.Max(ukemiWindow, seconds); }
+        public bool CanUkemi() { return ukemiWindow > 0f; }
+        public void ConsumeUkemi() { ukemiWindow = 0f; }
+
         private void Update() {
             // delegate visuals and locomotion helpers
             var loco = GetComponent<FighterLocomotion>();
             if (loco) loco.ApplyFreezeVisual(IsFrozen()); else ApplyFreezeVisual();
             if (loco) loco.AutoFaceOpponent(); else AutoFaceOpponent();
 
-            // reset air jump counter when grounded
-            if (IsGrounded()) jumpsUsed = 0;
+            // update jump rule timing and input buffer
+            if (jumpRule != null) jumpRule.Tick(IsGrounded(), PendingCommands.jump);
+
+            // decay hit confirm timer
+            if (hitConfirmTimer > 0f) hitConfirmTimer -= Time.deltaTime;
+            if (throwTechWindow > 0f) throwTechWindow -= Time.deltaTime;
+            if (ukemiWindow > 0f) ukemiWindow -= Time.deltaTime;
+            // input-based tech detection
+            if (throwTechWindow > 0f && PendingCommands.light) ConsumeTech();
 
             UpdateHurtboxEnable();
             if (!IsFrozen() && StateMachine != null) StateMachine.Tick();
@@ -194,42 +232,22 @@ namespace Fighter {
             if (Mathf.Abs(externalImpulseX) > 0.0001f) {
                 var loco = GetComponent<FighterLocomotion>();
                 if (loco) loco.NudgeHorizontal(externalImpulseX);
-                else {
-                    var pos = rb.position;
-                    float targetX = pos.x + externalImpulseX;
-                    rb.MovePosition(new Vector2(targetX, pos.y));
-                }
+                else rb.velocity = new Vector2(rb.velocity.x + externalImpulseX, rb.velocity.y);
                 externalImpulseX = 0f;
             }
         }
 
-        /// <summary>
-        /// True while the fighter is in hit-stop/freeze frames.
-        /// </summary>
-        bool IsFrozen() => FrameClock.Now < freezeUntilFrame;
-
-        /// <summary>
-        /// Apply freeze-time visual and physics simulation pause.
-        /// </summary>
-        void ApplyFreezeVisual() {
-            bool freeze = IsFrozen();
-            if (animator) animator.speed = freeze ? 0f : 1f;
-            rb.simulated = !freeze;
-        }
-
-        /// <summary>
-        /// Enter a temporary freeze measured in frames. Used for hit-stop feedback.
-        /// </summary>
+        public bool IsFrozen() { return FrameClock.Now < freezeUntilFrame; }
         public void FreezeFrames(int frames) {
             if (frames <= 0) return;
             if (!IsFrozen()) cachedVelocity = rb.velocity;
             freezeUntilFrame = Mathf.Max(freezeUntilFrame, FrameClock.Now + frames);
+            rb.velocity = Vector2.zero;
         }
-
-        /// <summary>
-        /// Called by inputs (player/AI) to provide the command snapshot for this frame.
-        /// </summary>
-        public void SetCommands(in FighterCommands cmd) { PendingCommands = cmd; }
+        void ApplyFreezeVisual() {
+            if (animator) animator.speed = IsFrozen() ? 0f : 1f;
+            if (rb) rb.simulated = !IsFrozen();
+        }
 
         /// <summary>
         /// Grounded horizontal movement; also transitions Idle/Walk as needed.
@@ -245,17 +263,15 @@ namespace Fighter {
         public void AirMove(float x) { var loco = GetComponent<FighterLocomotion>(); if (loco) loco.AirMove(x); else rb.velocity = new Vector2(x * (stats != null ? stats.walkSpeed : 6f), rb.velocity.y); }
         /// <summary>Attempt to jump if grounded and update animator.</summary>
         public bool CanJump() {
-            if (IsGrounded()) return true;
-            return jumpsUsed < 1; // allow one additional air jump (double-jump total = 2)
+            if (!jumpRule) jumpRule = GetComponent<JumpRule>();
+            return jumpRule ? jumpRule.CanPerformJump(IsGrounded()) : IsGrounded();
         }
         public void DoJump() {
-            // increment air jump counter only when not grounded
-            if (!IsGrounded()) jumpsUsed++;
+            if (jumpRule) jumpRule.NotifyJumpExecuted(IsGrounded());
             var loco = GetComponent<FighterLocomotion>();
             if (loco) loco.Jump();
             else { rb.velocity = new Vector2(rb.velocity.x, stats != null ? stats.jumpForce : 12f); if (AnimatorReady()) animator.SetTrigger("Jump"); }
         }
-        public void Jump() { if (CanJump()) DoJump(); }
 
         /// <summary>
         /// Entry point for starting an attack by trigger name (e.g., "Light"). Applies meter gates and optional heal.
@@ -278,17 +294,8 @@ namespace Fighter {
             debugHitActive = on;
             if (on) { attackInstanceId++; hitVictims.Clear(); hitStopApplied = false; }
             if (hitboxes == null) return;
-            foreach (var h in hitboxes) if (h != null) h.SetActive(on);
+            foreach (var h in hitboxes) if (h != null) h.active = on;
             if (srHasVisual) srVisual.color = on ? Color.yellow : srDefaultColor;
-        }
-
-        /// <summary>
-        /// Checks per-attack victim gating to avoid multi-hit registering the same target once per activation.
-        /// </summary>
-        public bool CanHitTarget(FighterController target) {
-            if (target == null) return false;
-            if (hitVictims.Contains(target)) return false;
-            hitVictims.Add(target); return true;
         }
 
         /// <summary>Queue a pending combo cancel into another trigger.</summary>
@@ -342,6 +349,11 @@ namespace Fighter {
                 bool enabled = true;
                 if (hb.region == Combat.HurtRegion.Head || hb.region == Combat.HurtRegion.Torso) enabled &= !UpperBodyInvuln;
                 if (hb.region == Combat.HurtRegion.Legs) enabled &= !LowerBodyInvuln;
+                // posture gating
+                bool grounded = IsGrounded();
+                if (grounded && !IsCrouching) enabled &= hb.activeStanding;
+                else if (grounded && IsCrouching) enabled &= hb.activeCrouching;
+                else enabled &= hb.activeAirborne;
                 hb.enabledThisFrame = enabled;
             }
         }
@@ -366,10 +378,22 @@ namespace Fighter {
             if (!res.wasBlocked) {
                 rb.velocity = new Vector2(dir * info.knockback.x, info.knockback.y);
                 if (AnimatorReady()) animator.SetTrigger("Hit");
-                Hitstun.Begin(res.appliedStun);
-                StateMachine.SetState(Hitstun);
+                // Knockdown routing (with player passive prevention)
+                bool requestKD = info.knockdownKind == Combat.KnockdownKind.Soft || info.knockdownKind == Combat.KnockdownKind.Hard;
+                if (requestKD && team == FighterTeam.Player && stats != null && stats.preventKnockdownIfMeter && meter >= stats.preventKnockdownMeterCost) {
+                    meter -= stats.preventKnockdownMeterCost; requestKD = false; // consume meter to prevent KD
+                }
+                if (requestKD) {
+                    float downDur = info.knockdownKind == Combat.KnockdownKind.Hard ? (stats != null ? stats.hardKnockdownTime : 1.0f) : (stats != null ? stats.softKnockdownTime : 0.6f);
+                    Downed.Begin(info.knockdownKind == Combat.KnockdownKind.Hard, downDur);
+                    StateMachine.SetState(Downed);
+                } else {
+                    Hitstun.Begin(res.appliedStun);
+                    StateMachine.SetState(Hitstun);
+                }
 
                 attacker.OnHitConfirmedLocal(res.appliedHitstop);
+                attacker.MarkHitConfirmed();
                 attacker.AddMeter(attacker.CurrentMove ? attacker.CurrentMove.meterOnHit : 20);
                 attacker.externalImpulseX += -dir * res.appliedPushback;
 
@@ -397,6 +421,9 @@ namespace Fighter {
             FreezeFrames(frames);
             Systems.CameraShaker.Instance?.Shake(0.1f, seconds);
         }
+
+        public void MarkHitConfirmed(float duration = 0.35f) { hitConfirmTimer = Mathf.Max(hitConfirmTimer, duration); }
+        public bool HasRecentHitConfirm() => hitConfirmTimer > 0f;
 
         /// <summary>
         /// Start a short dodge: trigger animation, grant brief invulnerability, and step in facing direction.
@@ -458,8 +485,28 @@ namespace Fighter {
                 canBeBlocked = false,
                 hitstopOnHit = 0.08f,
                 pushbackOnHit = 0.2f,
+                knockdownKind = Combat.KnockdownKind.Soft,
             };
             victim.TakeHit(info, this);
+            victim.StartUkemiWindow(0.4f);
+        }
+
+        public bool CanHitTarget(FighterController target) {
+            // avoid multi-hit on same activation and self-hit
+            if (target == null || target == this) return false;
+            if (hitVictims.Contains(target)) return false;
+            hitVictims.Add(target);
+            return true;
+        }
+
+        public bool IsOpponentInThrowRange(float maxDist) {
+            if (!opponent) return false;
+            if (!IsGrounded()) return false;
+            var opp = opponent.GetComponent<FighterController>();
+            if (!opp || !opp.IsGrounded()) return false;
+            float dx = Mathf.Abs(opponent.position.x - transform.position.x);
+            float dy = Mathf.Abs(opponent.position.y - transform.position.y);
+            return dx <= maxDist && dy <= 1.0f;
         }
     }
 }

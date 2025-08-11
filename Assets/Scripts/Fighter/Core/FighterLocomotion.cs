@@ -21,6 +21,7 @@ namespace Fighter.Core {
 
         public void Move(float x) {
             rb.velocity = new Vector2(x * (fighter.stats != null ? fighter.stats.walkSpeed : 6f), rb.velocity.y);
+            ResolveOverlapPushout();
         }
 
         public void HaltHorizontal() {
@@ -29,6 +30,7 @@ namespace Fighter.Core {
 
         public void AirMove(float x) {
             rb.velocity = new Vector2(x * (fighter.stats != null ? fighter.stats.walkSpeed : 6f), rb.velocity.y);
+            ResolveOverlapPushout();
         }
 
         public void Jump() {
@@ -63,6 +65,28 @@ namespace Fighter.Core {
             var pos = rb.position;
             float targetX = pos.x + deltaX;
             rb.MovePosition(new Vector2(targetX, pos.y));
+        }
+
+        // Simple pushout to avoid interpenetration and wall trap
+        void ResolveOverlapPushout() {
+            if (!bodyCollider) return;
+            var b = bodyCollider.bounds;
+            // push from other fighters' pushboxes
+            var hits = Physics2D.OverlapBoxAll(b.center, b.size * 0.98f, 0f);
+            foreach (var h in hits) {
+                if (h == null || h.attachedRigidbody == rb) continue;
+                if (h.GetComponent<Combat.Pushbox>() == null) continue;
+                var other = h.bounds;
+                if (!b.Intersects(other)) continue;
+                float dxLeft = other.max.x - b.min.x;
+                float dxRight = b.max.x - other.min.x;
+                // choose minimal horizontal separation direction
+                float push = Mathf.Abs(dxLeft) < Mathf.Abs(dxRight) ? -dxLeft : dxRight;
+                rb.position += new Vector2(push * 1.01f, 0f);
+            }
+            // clamp to simple arena bounds (optional): -10..10
+            float x = Mathf.Clamp(rb.position.x, -10f, 10f);
+            rb.position = new Vector2(x, rb.position.y);
         }
     }
 }
