@@ -10,14 +10,8 @@ using Fighter.Core;
 namespace Fighter {
     /// <summary>
     /// Central gameplay component for a fighter.
-    /// Owns runtime state (HP/Meter/Facing), the finite state machine (idle/walk/crouch/jump/block/dodge/attack/hitstun/KO),
+    /// Owns runtime state (HP/Meter/Facing), the hierarchical finite state machine (HFSM) controlling behavior,
     /// references to colliders and animator, and exposes utility methods used by hit/guard/combo systems.
-    /// High-level responsibilities:
-    /// - Movement and facing control
-    /// - Attack lifecycle and hitbox toggling (driven by FSM and/or animation events)
-    /// - Damage intake, block evaluation, hitstun/knockdown transitions, and hit-stop freeze
-    /// - Resource changes (meter gain/spend, optional heal on special)
-    /// - Basic visual debug (attack active color, auto-face)
     /// </summary>
     public enum FighterTeam { Player, AI }
 
@@ -25,9 +19,7 @@ namespace Fighter {
     /// Normalized command snapshot provided each frame by an input source (player, AI, or feeder).
     /// </summary>
     public struct FighterCommands {
-        /// <summary>Horizontal movement input in range [-1, 1].</summary>
         public float moveX;
-        /// <summary>Pressed this frame to attempt a jump (consumed if grounded).</summary>
         public bool jump, crouch, light, heavy, block, dodge;
     }
 
@@ -35,83 +27,41 @@ namespace Fighter {
     [DefaultExecutionOrder(50)]
     public class FighterController : MonoBehaviour {
         [Header("Refs")]
-        /// <summary>Core character stat block (HP, speeds, gravity, chip ratio, dodge durations).</summary>
         public FighterStats stats;
-        /// <summary>Move database mapped by trigger name (e.g., "Light", "Heavy", "Super").</summary>
         public MoveSet moveSet;
-        /// <summary>Transform of the current opponent; used for auto-facing and distance logic.</summary>
         public Transform opponent;
-        /// <summary>Animator driving visual state and animation triggers.</summary>
         public Animator animator;
-        /// <summary>RigidBody2D used for motion/physics queries.</summary>
         public Rigidbody2D rb;
-        /// <summary>Main body collider used for ground checks. Optional but recommended.</summary>
         public CapsuleCollider2D bodyCollider;
-        /// <summary>All hurtboxes that can be struck. These are toggled per-region via invulnerability flags.</summary>
         public Hurtbox[] hurtboxes;
-        /// <summary>All hitboxes toggled on during the active frames of an attack.</summary>
         public Hitbox[] hitboxes;
         public FighterTeam team = FighterTeam.Player;
 
         // Damage events
-        /// <summary>Raised on the victim when real damage (after block) was applied.</summary>
-        public event Action<FighterController> OnDamaged; // invoked on victim when real damage dealt
-        /// <summary>Raised for any damage event (victim, attacker), useful for global UI counters.</summary>
-        public static event Action<FighterController, FighterController> OnAnyDamage; // (victim, attacker)
+        public event Action<FighterController> OnDamaged;
+        public static event Action<FighterController, FighterController> OnAnyDamage;
         public event Action<string,string> OnStateChanged; // (stateName, moveName)
 
         [Header("Physics")]
-        /// <summary>Layer mask considered ground for grounded checks.</summary>
-        public LayerMask groundMask = ~0; // default: everything
+        public LayerMask groundMask = ~0;
 
         [Header("Runtime")]
-        /// <summary>Current hit points (HP).</summary>
         public int currentHealth;
-        /// <summary>Current super/ability meter.</summary>
         public int meter;
-        /// <summary>Maximum meter value.</summary>
         public int maxMeter = 1000;
-        /// <summary>True if the fighter currently faces right; transforms scale X by +/-1 accordingly.</summary>
         public bool facingRight = true;
-        /// <summary>True if the fighter is in crouch state.</summary>
         public bool IsCrouching { get; set; }
-        /// <summary>Upper-body invulnerability flag (e.g., during certain dodges/animations).</summary>
         public bool UpperBodyInvuln { get; private set; }
-        /// <summary>Lower-body invulnerability flag.</summary>
         public bool LowerBodyInvuln { get; private set; }
 
-        /// <summary>The data of the move currently being executed, if any.</summary>
-        public MoveData CurrentMove { get; private set; }
-
-        /// <summary>The latest input snapshot provided by an input source.</summary>
+        public Data.MoveData CurrentMove { get; private set; }
         public FighterCommands PendingCommands { get; private set; }
-        // Legacy single-layer FSM kept for fallback; HFSM is authoritative.
-        public Fighter.FSM.StateMachine StateMachine { get; private set; }
-        // HFSM
+
+        // HFSM (authoritative)
         public Fighter.HFSM.HStateMachine HMachine { get; private set; }
         public Fighter.HFSM.RootState HRoot { get; private set; }
 
-        /// <summary>Called by inputs (player/AI) to provide the command snapshot for this frame.</summary>
         public void SetCommands(in FighterCommands cmd) { PendingCommands = cmd; }
-
-        /// <summary>State singleton instances created at Awake.</summary>
-        public IdleState Idle { get; private set; }
-        public WalkState Walk { get; private set; }
-        public CrouchState Crouch { get; private set; }
-        public JumpAirState JumpState { get; private set; }
-        public BlockState Block { get; private set; }
-        public DodgeState Dodge { get; private set; }
-        public AttackState AttackLight { get; private set; }
-        public AttackState AttackHeavy { get; private set; }
-        public HitstunState Hitstun { get; private set; }
-        public KnockdownState KO { get; private set; }
-        public States.PreJumpState PreJump { get; private set; }
-        public States.LandingState Landing { get; private set; }
-        public States.DashState Dash { get; private set; }
-        public States.BackdashState Backdash { get; private set; }
-        public States.ThrowState Throw { get; private set; }
-        public States.WakeupState Wakeup { get; private set; }
-        public States.DownedState Downed { get; private set; }
 
         public FighterStats Stats => stats;
 
@@ -126,15 +76,12 @@ namespace Fighter {
         public string debugMoveName { get; private set; }
         SpriteRenderer srVisual; Color srDefaultColor; bool srHasVisual;
 
-        // per-attack gating
         int attackInstanceId;
         readonly HashSet<FighterController> hitVictims = new HashSet<FighterController>();
         bool hitStopApplied;
 
-        // hit confirm helper (for AI/meter cancel decisions)
         float hitConfirmTimer;
 
-        // throw/tech windows
         float throwTechWindow;
         float ukemiWindow;
         bool techTriggered;
@@ -162,29 +109,22 @@ namespace Fighter {
             jumpRule = GetComponent<JumpRule>();
             if (!jumpRule) jumpRule = gameObject.AddComponent<JumpRule>();
 
-            StateMachine = new Fighter.FSM.StateMachine(); // legacy fallback only
-
-            // New HFSM init
+            // HFSM init
             HMachine = new Fighter.HFSM.HStateMachine();
             HRoot = new Fighter.HFSM.RootState(this);
             HMachine.OnStateChanged += (name) => { OnStateChanged?.Invoke(name, debugMoveName ?? ""); };
         }
 
-        /// <summary>
-        /// Fast check to ensure animator is present and has a runtime controller.
-        /// </summary>
-        private bool AnimatorReady() {
-            return animator != null && animator.runtimeAnimatorController != null;
-        }
+        private bool AnimatorReady() { return animator != null && animator.runtimeAnimatorController != null; }
 
         private void Start() { HMachine.SetInitial(HRoot, HRoot.Locomotion); }
 
         public void NotifyStateChanged() { OnStateChanged?.Invoke(GetCurrentStateName(), debugMoveName ?? ""); }
 
         // Animator Event hooks (to be called from throw animations)
-        public void AE_ThrowStart() { /* placeholder for throw windup */ }
-        public void AE_ThrowConnect() { /* on connect, apply throw on target if in range */ if (opponent) { var vic = opponent.GetComponent<FighterController>(); ApplyThrowOn(vic); StartThrowTechWindow(0.25f); } }
-        public void AE_ThrowEnd() { /* end of throw */ }
+        public void AE_ThrowStart() { }
+        public void AE_ThrowConnect() { if (opponent) { var vic = opponent.GetComponent<FighterController>(); ApplyThrowOn(vic); StartThrowTechWindow(0.25f); } }
+        public void AE_ThrowEnd() { }
 
         public void StartThrowTechWindow(float seconds) { throwTechWindow = Mathf.Max(throwTechWindow, seconds); }
         public bool CanTechThrow() { return throwTechWindow > 0f; }
@@ -196,25 +136,19 @@ namespace Fighter {
         public void ConsumeUkemi() { ukemiWindow = 0f; }
 
         private void Update() {
-            // delegate visuals and locomotion helpers
             var loco = GetComponent<FighterLocomotion>();
             if (loco) loco.ApplyFreezeVisual(IsFrozen()); else ApplyFreezeVisual();
             if (loco) loco.AutoFaceOpponent(); else AutoFaceOpponent();
 
-            // update jump rule timing and input buffer
             if (jumpRule != null) jumpRule.Tick(IsGrounded(), PendingCommands.jump);
 
-            // decay hit confirm timer
             if (hitConfirmTimer > 0f) hitConfirmTimer -= Time.deltaTime;
             if (throwTechWindow > 0f) throwTechWindow -= Time.deltaTime;
             if (ukemiWindow > 0f) ukemiWindow -= Time.deltaTime;
-            // input-based tech detection
             if (throwTechWindow > 0f && PendingCommands.light) ConsumeTech();
 
             UpdateHurtboxEnable();
-            if (!IsFrozen()) {
-                if (HMachine != null) HMachine.Tick(); else if (StateMachine != null) StateMachine.Tick();
-            }
+            if (!IsFrozen()) { if (HMachine != null) HMachine.Tick(); }
             if (AnimatorReady()) {
                 animator.SetFloat("SpeedX", Mathf.Abs(rb.velocity.x));
                 animator.SetBool("Grounded", IsGrounded());
@@ -226,30 +160,27 @@ namespace Fighter {
         }
 
         // HFSM helpers
-        public string GetCurrentStateName() { return HMachine != null && HMachine.Current != null ? HMachine.Current.Name : (StateMachine?.Current?.Name ?? string.Empty); }
+        public string GetCurrentStateName() { return HMachine != null && HMachine.Current != null ? HMachine.Current.Name : string.Empty; }
         public void EnterAttackHFSM(string trigger) {
-            if (HMachine == null || HRoot == null) { if (trigger == "Light") StateMachine.SetState(AttackLight); else StateMachine.SetState(AttackHeavy); return; }
             var loc = HRoot.Locomotion;
             Fighter.HFSM.AttackState target = null;
             if (IsGrounded()) target = (trigger == "Light") ? loc.Grounded.AttackLight : loc.Grounded.AttackHeavy;
             else target = (trigger == "Light") ? loc.Air.AirLight : loc.Air.AirHeavy;
             HMachine.ChangeState(target);
         }
-        public void EnterThrowHFSM() { if (HMachine == null) { StateMachine.SetState(Throw); return; } HMachine.ChangeState(HRoot.Locomotion.Grounded.Throw); }
-        public void EnterBlockHFSM() { if (HMachine == null) { StateMachine.SetState(Block); return; } HMachine.ChangeState(HRoot.Locomotion.Grounded.Block); }
-        public void EnterCrouchHFSM() { if (HMachine == null) { StateMachine.SetState(Crouch); return; } HMachine.ChangeState(HRoot.Locomotion.Grounded.Crouch); }
-        public void EnterDodgeHFSM() { if (HMachine == null) { StateMachine.SetState(Dodge); return; } HMachine.ChangeState(HRoot.Locomotion.Grounded.Dodge); }
+        public void EnterThrowHFSM() { HMachine.ChangeState(HRoot.Locomotion.Grounded.Throw); }
+        public void EnterBlockHFSM() { HMachine.ChangeState(HRoot.Locomotion.Grounded.Block); }
+        public void EnterCrouchHFSM() { HMachine.ChangeState(HRoot.Locomotion.Grounded.Crouch); }
+        public void EnterDodgeHFSM() { HMachine.ChangeState(HRoot.Locomotion.Grounded.Dodge); }
         public void EnterHitstunHFSM(float seconds) {
-            if (HMachine == null || HRoot == null) { Hitstun.Begin(seconds); StateMachine.SetState(Hitstun); return; }
             var loc = HRoot.Locomotion;
             var hs = IsGrounded() ? loc.Grounded.Hitstun : loc.Air.Hitstun;
             hs.Begin(seconds);
             HMachine.ChangeState(hs);
         }
         public void EnterDownedHFSM(bool hard, float duration) {
-            if (HMachine == null || HRoot == null) { StateMachine.SetState(KO); return; }
             var loc = HRoot.Locomotion;
-            var dn = loc.Grounded.Downed; // simple for now
+            var dn = loc.Grounded.Downed; // TODO: hard/soft variants
             HMachine.ChangeState(dn);
         }
 
@@ -275,33 +206,15 @@ namespace Fighter {
             if (rb) rb.simulated = !IsFrozen();
         }
 
-        /// <summary>
-        /// Grounded horizontal movement; also transitions Idle/Walk as needed.
-        /// </summary>
         public void Move(float x) {
             var loco = GetComponent<FighterLocomotion>();
             if (loco) loco.Move(x); else rb.velocity = new Vector2(x * (stats != null ? stats.walkSpeed : 6f), rb.velocity.y);
-            // State transitions are controlled in Idle/Walk states to avoid thrashing here.
         }
-        /// <summary>Immediate halt of horizontal velocity.</summary>
         public void HaltHorizontal() { var loco = GetComponent<FighterLocomotion>(); if (loco) loco.HaltHorizontal(); else rb.velocity = new Vector2(0, rb.velocity.y); }
-        /// <summary>Airborne horizontal control.</summary>
         public void AirMove(float x) { var loco = GetComponent<FighterLocomotion>(); if (loco) loco.AirMove(x); else rb.velocity = new Vector2(x * (stats != null ? stats.walkSpeed : 6f), rb.velocity.y); }
-        /// <summary>Attempt to jump if grounded and update animator.</summary>
-        public bool CanJump() {
-            if (!jumpRule) jumpRule = GetComponent<JumpRule>();
-            return jumpRule ? jumpRule.CanPerformJump(IsGrounded()) : IsGrounded();
-        }
-        public void DoJump() {
-            if (jumpRule) jumpRule.NotifyJumpExecuted(IsGrounded());
-            var loco = GetComponent<FighterLocomotion>();
-            if (loco) loco.Jump();
-            else { rb.velocity = new Vector2(rb.velocity.x, stats != null ? stats.jumpForce : 12f); if (AnimatorReady()) animator.SetTrigger("Jump"); }
-        }
+        public bool CanJump() { if (!jumpRule) jumpRule = GetComponent<JumpRule>(); return jumpRule ? jumpRule.CanPerformJump(IsGrounded()) : IsGrounded(); }
+        public void DoJump() { if (jumpRule) jumpRule.NotifyJumpExecuted(IsGrounded()); var loco = GetComponent<FighterLocomotion>(); if (loco) loco.Jump(); else { rb.velocity = new Vector2(rb.velocity.x, stats != null ? stats.jumpForce : 12f); if (AnimatorReady()) animator.SetTrigger("Jump"); } }
 
-        /// <summary>
-        /// Entry point for starting an attack by trigger name (e.g., "Light"). Applies meter gates and optional heal.
-        /// </summary>
         public void TriggerAttack(string trigger) {
             var atk = GetComponent<Fighter.Core.AttackExecutor>();
             if (atk) { atk.TriggerAttack(trigger); return; }
@@ -311,9 +224,7 @@ namespace Fighter {
             if (CurrentMove != null && CurrentMove.healAmount > 0) { AddHealth(CurrentMove.healAmount); }
             if (AnimatorReady()) animator.SetTrigger(trigger);
         }
-        /// <summary>Clear the current move reference (typically on exit/recovery).</summary>
         public void ClearCurrentMove() { CurrentMove = null; debugMoveName = null; }
-        /// <summary>Toggle all hitboxes on/off for the active frames.</summary>
         public void SetAttackActive(bool on) {
             var atk = GetComponent<Fighter.Core.AttackExecutor>();
             if (atk) { atk.SetAttackActive(on); return; }
@@ -324,58 +235,33 @@ namespace Fighter {
             if (srHasVisual) srVisual.color = on ? Color.yellow : srDefaultColor;
         }
 
-        /// <summary>Queue a pending combo cancel into another trigger.</summary>
         public void RequestComboCancel(string trigger) { pendingCancelTrigger = trigger; hasPendingCancel = true; }
-        /// <summary>Consume pending combo cancel if present.</summary>
         public bool TryConsumeComboCancel(out string trigger) { trigger = null; if (!hasPendingCancel) return false; hasPendingCancel = false; trigger = pendingCancelTrigger; return true; }
 
-        /// <summary>Utility check for animator tag on layer 0.</summary>
         public bool AnimatorIsTag(string tag) { return animator != null && animator.GetCurrentAnimatorStateInfo(0).IsTag(tag); }
-
-        /// <summary>Adapter for new core components: set current move data.</summary>
         public void SetCurrentMove(Data.MoveData md) { CurrentMove = md; }
-        /// <summary>Adapter for new core components: increment attack instance id for per-activation gating.</summary>
         public void IncrementAttackInstanceId() { attackInstanceId++; }
-        /// <summary>Adapter for new core components: clear per-attack victim set.</summary>
         public void ClearHitVictimsSet() { hitVictims.Clear(); }
-        /// <summary>Adapter for new core components: set active color on visual sprite.</summary>
         public void SetActiveColor(bool on) { if (srHasVisual) srVisual.color = on ? Color.yellow : srDefaultColor; }
-        /// <summary>Adapter for new core components: add horizontal impulse to be applied in FixedUpdate.</summary>
         public void AddExternalImpulse(float dx) { externalImpulseX += dx; }
-        /// <summary>Adapter for new core components: raise damage events.</summary>
         public void RaiseDamaged(FighterController attacker) { OnDamaged?.Invoke(this); OnAnyDamage?.Invoke(this, attacker); }
 
-        /// <summary>Add to the meter (clamped to [0, maxMeter]).</summary>
         public void AddMeter(int value) { var res = GetComponent<Fighter.Core.FighterResources>(); if (res) res.AddMeter(value); else meter = Mathf.Clamp(meter + value, 0, maxMeter); }
-        /// <summary>Consume meter if available; returns true on success.</summary>
         public bool ConsumeMeter(int value) { var res = GetComponent<Fighter.Core.FighterResources>(); if (res) return res.ConsumeMeter(value); if (meter < value) return false; meter -= value; return true; }
-        /// <summary>Restore HP by value, clamped to max HP.</summary>
         public void AddHealth(int value) { var res = GetComponent<Fighter.Core.FighterResources>(); if (res) res.AddHealth(value); else { int maxHp = stats != null ? stats.maxHealth : 100; currentHealth = Mathf.Clamp(currentHealth + value, 0, maxHp); } }
 
-        /// <summary>
-        /// Evaluate if a given incoming hit can be blocked given current command/grounding/crouch.
-        /// </summary>
-        public bool CanBlock(DamageInfo info) {
-            return GuardEvaluator.CanBlock(PendingCommands.block, IsGrounded(), IsCrouching, info.level);
-        }
+        public bool CanBlock(DamageInfo info) { return GuardEvaluator.CanBlock(PendingCommands.block, IsGrounded(), IsCrouching, info.level); }
 
-        /// <summary>Set upper-body invulnerability for this frame series.</summary>
         public void SetUpperBodyInvuln(bool on) { UpperBodyInvuln = on; }
-        /// <summary>Set lower-body invulnerability for this frame series.</summary>
         public void SetLowerBodyInvuln(bool on) { LowerBodyInvuln = on; }
-        /// <summary>Adapter for new core components: invuln toggles via FighterResources.</summary>
         public void SetUpperLowerInvuln(bool up, bool low) { var res = GetComponent<Fighter.Core.FighterResources>(); if (res) { res.SetUpperBodyInvuln(up); res.SetLowerBodyInvuln(low);} else { UpperBodyInvuln = up; LowerBodyInvuln = low; } }
 
-        /// <summary>
-        /// Per-frame toggling of hurtboxes according to invulnerability flags and regions.
-        /// </summary>
         void UpdateHurtboxEnable() {
             if (hurtboxes == null) return;
             foreach (var hb in hurtboxes) if (hb != null) {
                 bool enabled = true;
                 if (hb.region == Combat.HurtRegion.Head || hb.region == Combat.HurtRegion.Torso) enabled &= !UpperBodyInvuln;
                 if (hb.region == Combat.HurtRegion.Legs) enabled &= !LowerBodyInvuln;
-                // posture gating
                 bool grounded = IsGrounded();
                 if (grounded && !IsCrouching) enabled &= hb.activeStanding;
                 else if (grounded && IsCrouching) enabled &= hb.activeCrouching;
@@ -384,9 +270,6 @@ namespace Fighter {
             }
         }
 
-        /// <summary>
-        /// Main damage intake flow: applies invulnerability, resolves block vs hit, updates HP/meter/pushback, transitions to Hitstun/KO as needed.
-        /// </summary>
         public void TakeHit(DamageInfo info, FighterController attacker) {
             var recv = GetComponent<Fighter.Core.DamageReceiver>();
             if (recv) { recv.TakeHit(info, attacker); return; }
@@ -406,15 +289,9 @@ namespace Fighter {
                 rb.velocity = new Vector2(dir * info.knockback.x, info.knockback.y);
                 if (AnimatorReady()) animator.SetTrigger("Hit");
                 bool requestKD = info.knockdownKind == Combat.KnockdownKind.Soft || info.knockdownKind == Combat.KnockdownKind.Hard;
-                if (requestKD && team == FighterTeam.Player && stats != null && stats.preventKnockdownIfMeter && meter >= stats.preventKnockdownMeterCost) {
-                    meter -= stats.preventKnockdownMeterCost; requestKD = false;
-                }
-                if (requestKD) {
-                    float downDur = info.knockdownKind == Combat.KnockdownKind.Hard ? (stats != null ? stats.hardKnockdownTime : 1.0f) : (stats != null ? stats.softKnockdownTime : 0.6f);
-                    EnterDownedHFSM(info.knockdownKind == Combat.KnockdownKind.Hard, downDur);
-                } else {
-                    EnterHitstunHFSM(res.appliedStun);
-                }
+                if (requestKD && team == FighterTeam.Player && stats != null && stats.preventKnockdownIfMeter && meter >= stats.preventKnockdownMeterCost) { meter -= stats.preventKnockdownMeterCost; requestKD = false; }
+                if (requestKD) { float downDur = info.knockdownKind == Combat.KnockdownKind.Hard ? (stats != null ? stats.hardKnockdownTime : 1.0f) : (stats != null ? stats.softKnockdownTime : 0.6f); EnterDownedHFSM(info.knockdownKind == Combat.KnockdownKind.Hard, downDur); }
+                else { EnterHitstunHFSM(res.appliedStun); }
 
                 attacker.OnHitConfirmedLocal(res.appliedHitstop);
                 attacker.MarkHitConfirmed();
@@ -425,22 +302,17 @@ namespace Fighter {
             } else {
                 if (AnimatorReady()) animator.SetTrigger("BlockHit");
                 EnterHitstunHFSM(res.appliedStun);
-
                 attacker.OnHitConfirmedLocal(res.appliedHitstop);
                 attacker.AddMeter(attacker.CurrentMove ? attacker.CurrentMove.meterOnBlock : 10);
                 attacker.externalImpulseX += -dir * res.appliedPushback;
             }
         }
 
-        /// <summary>
-        /// Local feedback on successful contact: apply hit-stop and shake.
-        /// </summary>
-        public event Action<float> OnHitConfirm; // (hitstop seconds)
+        public event Action<float> OnHitConfirm;
         public void OnHitConfirmedLocal(float seconds) {
             var atk = GetComponent<Fighter.Core.AttackExecutor>();
             if (atk) { atk.OnHitConfirmedLocal(seconds); return; }
-            if (hitStopApplied) return;
-            hitStopApplied = true;
+            if (hitStopApplied) return; hitStopApplied = true;
             int frames = FrameClock.SecondsToFrames(seconds);
             FreezeFrames(frames);
             Systems.CameraShaker.Instance?.Shake(0.1f, seconds);
@@ -450,9 +322,6 @@ namespace Fighter {
         public void MarkHitConfirmed(float duration = 0.35f) { hitConfirmTimer = Mathf.Max(hitConfirmTimer, duration); }
         public bool HasRecentHitConfirm() => hitConfirmTimer > 0f;
 
-        /// <summary>
-        /// Start a short dodge: trigger animation, grant brief invulnerability, and step in facing direction.
-        /// </summary>
         public void StartDodge() {
             if (AnimatorReady()) animator.SetTrigger("Dodge");
             float dir = facingRight ? 1f : -1f;
@@ -460,7 +329,6 @@ namespace Fighter {
             float inv = stats != null ? stats.dodgeInvuln : 0.2f;
             StartCoroutine(DodgeInvuln(inv));
         }
-
         System.Collections.IEnumerator DodgeInvuln(float seconds) {
             SetUpperLowerInvuln(true, true);
             int frames = FrameClock.SecondsToFrames(seconds);
@@ -469,18 +337,12 @@ namespace Fighter {
             SetUpperLowerInvuln(false, false);
         }
 
-        /// <summary>
-        /// Auto-face the opponent by flipping local scale X around center.
-        /// </summary>
         void AutoFaceOpponent() {
             if (!opponent) return;
             bool shouldFaceRight = transform.position.x <= opponent.position.x;
             if (shouldFaceRight != facingRight) { facingRight = shouldFaceRight; var s = transform.localScale; s.x = Mathf.Abs(s.x) * (facingRight ? 1 : -1); transform.localScale = s; }
         }
 
-        /// <summary>
-        /// Checks for ground using either body collider bounds or a short ray/box below the character.
-        /// </summary>
         public bool IsGrounded() {
             var loco = GetComponent<FighterLocomotion>();
             if (loco) return loco.IsGrounded(groundMask);
@@ -491,11 +353,8 @@ namespace Fighter {
             return Physics2D.OverlapBox(boxCenter, boxSize, 0f, groundMask) != null;
         }
 
-        /// <summary>Convenience wrapper to set animator booleans safely.</summary>
         public void SetAnimatorBool(string key, bool v) { if (AnimatorReady()) animator.SetBool(key, v); }
-        /// <summary>Adapter for new core components: set debug move name for UI/telemetry.</summary>
         public void SetDebugMoveName(string name) { debugMoveName = name; }
-        /// <summary>Adapter for new core components: set debug hit active flag.</summary>
         public void SetDebugHitActive(bool on) { debugHitActive = on; }
 
         public bool TryConsumeDashRequest(out bool isBack) { if (!dashRequested) { isBack = false; return false; } isBack = dashBack; dashRequested = false; return true; }
@@ -517,7 +376,6 @@ namespace Fighter {
         }
 
         public bool CanHitTarget(FighterController target) {
-            // avoid multi-hit on same activation and self-hit
             if (target == null || target == this) return false;
             if (hitVictims.Contains(target)) return false;
             hitVictims.Add(target);
