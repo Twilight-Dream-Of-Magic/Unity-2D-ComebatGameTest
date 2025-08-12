@@ -88,6 +88,9 @@ namespace Fighter {
         public FighterCommands PendingCommands { get; private set; }
         /// <summary>Finite state machine controlling fighter behavior.</summary>
         public StateMachine StateMachine { get; private set; }
+        // HFSM
+        public Fighter.HFSM.HStateMachine HMachine { get; private set; }
+        public Fighter.HFSM.RootState HRoot { get; private set; }
 
         /// <summary>Called by inputs (player/AI) to provide the command snapshot for this frame.</summary>
         public void SetCommands(in FighterCommands cmd) { PendingCommands = cmd; }
@@ -178,6 +181,11 @@ namespace Fighter {
             Throw = new States.ThrowState(this);
             Wakeup = new States.WakeupState(this);
             Downed = new States.DownedState(this);
+
+            // New HFSM init
+            HMachine = new Fighter.HFSM.HStateMachine();
+            HRoot = new Fighter.HFSM.RootState(this);
+            HMachine.OnStateChanged += (name) => { OnStateChanged?.Invoke(name, debugMoveName ?? ""); };
         }
 
         /// <summary>
@@ -187,7 +195,7 @@ namespace Fighter {
             return animator != null && animator.runtimeAnimatorController != null;
         }
 
-        private void Start() { StateMachine.SetState(Idle); }
+        private void Start() { StateMachine.SetState(Idle); HMachine.SetInitial(HRoot, HRoot.Locomotion); }
 
         public void NotifyStateChanged() { OnStateChanged?.Invoke(StateMachine?.Current?.Name ?? "-", debugMoveName ?? ""); }
 
@@ -222,7 +230,9 @@ namespace Fighter {
             if (throwTechWindow > 0f && PendingCommands.light) ConsumeTech();
 
             UpdateHurtboxEnable();
-            if (!IsFrozen() && StateMachine != null) StateMachine.Tick();
+            if (!IsFrozen()) {
+                if (HMachine != null) HMachine.Tick(); else if (StateMachine != null) StateMachine.Tick();
+            }
             if (AnimatorReady()) {
                 animator.SetFloat("SpeedX", Mathf.Abs(rb.velocity.x));
                 animator.SetBool("Grounded", IsGrounded());

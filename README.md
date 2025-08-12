@@ -15,6 +15,13 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
 - Player input now sets `J/K` directly into the per-frame command snapshot in addition to enqueuing tokens (so light/heavy attacks work even without the queue feeder).
 - `AttackExecutor` ensures hitboxes are discovered and owner-bound on `Awake`.
 
+## Layered State Machine (HFSM)
+- New hierarchical FSM organizes gameplay states with KOF rules while supporting layered blending:
+  - Root -> Locomotion(super) -> `Grounded` / `Air`
+  - `Grounded` children: `Idle`, `Walk`, `Crouch`, `Block`, `Attack-Light`, `Attack-Heavy`, `Hitstun`, `Downed`, `Throw`, `Dodge`
+  - `Air` children: `Jump`, `AirAttack-Light`, `AirAttack-Heavy`, `Hitstun`
+- The controller now ticks the HFSM; legacy FSM remains for compatibility but is bypassed by default.
+
 ## Repo Structure
 - `Assets/` (created after opening Unity)
   - `Scripts/`
