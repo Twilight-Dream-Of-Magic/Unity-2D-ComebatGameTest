@@ -25,7 +25,7 @@ namespace Fighter.Core {
             fighter.currentHealth = Mathf.Clamp(fighter.currentHealth - res.finalDamage, 0, maxHp);
             var frc = fighter.GetComponent<FighterResources>(); if (frc != null) frc.OnHealthChanged?.Invoke(fighter.currentHealth, maxHp);
 
-            if (fighter.currentHealth == 0) { fighter.StateMachine.SetState(fighter.KO); if (AnimatorReady()) animator.SetTrigger("KO"); return; }
+            if (fighter.currentHealth == 0) { if (AnimatorReady()) animator.SetTrigger("KO"); return; }
 
             float dir = Mathf.Sign(transform.position.x - attacker.transform.position.x);
             if (!res.wasBlocked) {

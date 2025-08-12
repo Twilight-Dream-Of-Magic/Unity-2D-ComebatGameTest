@@ -1,7 +1,6 @@
 using UnityEngine;
 using Combat;
-using Fighter.FSM;
-using Fighter.States;
+// using Fighter.FSM;
 using Data;
 using Systems;
 using System;
@@ -86,8 +85,8 @@ namespace Fighter {
 
         /// <summary>The latest input snapshot provided by an input source.</summary>
         public FighterCommands PendingCommands { get; private set; }
-        /// <summary>Finite state machine controlling fighter behavior.</summary>
-        public StateMachine StateMachine { get; private set; }
+        // Legacy single-layer FSM kept for fallback; HFSM is authoritative.
+        public Fighter.FSM.StateMachine StateMachine { get; private set; }
         // HFSM
         public Fighter.HFSM.HStateMachine HMachine { get; private set; }
         public Fighter.HFSM.RootState HRoot { get; private set; }
@@ -163,24 +162,7 @@ namespace Fighter {
             jumpRule = GetComponent<JumpRule>();
             if (!jumpRule) jumpRule = gameObject.AddComponent<JumpRule>();
 
-            StateMachine = new StateMachine();
-            Idle = new IdleState(this);
-            Walk = new WalkState(this);
-            Crouch = new CrouchState(this);
-            JumpState = new JumpAirState(this);
-            Block = new BlockState(this);
-            Dodge = new DodgeState(this);
-            AttackLight = new AttackState(this, "Light");
-            AttackHeavy = new AttackState(this, "Heavy");
-            Hitstun = new HitstunState(this);
-            KO = new KnockdownState(this);
-            PreJump = new States.PreJumpState(this);
-            Landing = new States.LandingState(this);
-            Dash = new States.DashState(this);
-            Backdash = new States.BackdashState(this);
-            Throw = new States.ThrowState(this);
-            Wakeup = new States.WakeupState(this);
-            Downed = new States.DownedState(this);
+            StateMachine = new Fighter.FSM.StateMachine(); // legacy fallback only
 
             // New HFSM init
             HMachine = new Fighter.HFSM.HStateMachine();
@@ -195,9 +177,9 @@ namespace Fighter {
             return animator != null && animator.runtimeAnimatorController != null;
         }
 
-        private void Start() { StateMachine.SetState(Idle); HMachine.SetInitial(HRoot, HRoot.Locomotion); }
+        private void Start() { HMachine.SetInitial(HRoot, HRoot.Locomotion); }
 
-        public void NotifyStateChanged() { OnStateChanged?.Invoke(StateMachine?.Current?.Name ?? "-", debugMoveName ?? ""); }
+        public void NotifyStateChanged() { OnStateChanged?.Invoke(GetCurrentStateName(), debugMoveName ?? ""); }
 
         // Animator Event hooks (to be called from throw animations)
         public void AE_ThrowStart() { /* placeholder for throw windup */ }
@@ -417,7 +399,7 @@ namespace Fighter {
             currentHealth = Mathf.Clamp(currentHealth - res.finalDamage, 0, maxHp);
             var fr = GetComponent<Fighter.Core.FighterResources>(); if (fr != null) fr.OnHealthChanged?.Invoke(currentHealth, maxHp);
 
-            if (currentHealth == 0) { StateMachine.SetState(KO); if (AnimatorReady()) animator.SetTrigger("KO"); return; }
+            if (currentHealth == 0) { if (AnimatorReady()) animator.SetTrigger("KO"); return; }
 
             float dir = Mathf.Sign(transform.position.x - attacker.transform.position.x);
             if (!res.wasBlocked) {
