@@ -16,7 +16,7 @@ namespace UI {
             InitNow();
         }
         void OnDisable() { if (fighter) fighter.OnStateChanged -= OnState; }
-        void InitNow() { OnState(fighter?.StateMachine?.Current?.Name ?? "-", fighter?.debugMoveName ?? ""); }
+        void InitNow() { OnState(fighter ? fighter.GetCurrentStateName() : "-", fighter?.debugMoveName ?? ""); }
         void OnState(string state, string move) {
             if (!text) return;
             var line = format.Replace("{state}", state ?? "-").Replace("{move}", move ?? "");

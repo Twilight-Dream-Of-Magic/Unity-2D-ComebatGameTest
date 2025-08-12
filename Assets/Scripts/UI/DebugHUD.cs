@@ -50,7 +50,7 @@ namespace UI {
 
             string BuildLine(Fighter.FighterController f) {
                 if (f == null) return "-";
-                var st = f.StateMachine?.Current?.Name ?? "None";
+                var st = f.GetCurrentStateName();
                 if (!showDetails) {
                     string moveLine = f.CurrentMove != null ? $"{f.CurrentMove.triggerName} A:{f.debugHitActive}" : "";
                     return $"{(f.team==Fighter.FighterTeam.Player?"P1":"P2")}  {st}  {moveLine}";

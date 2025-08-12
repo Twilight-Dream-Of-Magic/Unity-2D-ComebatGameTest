@@ -156,11 +156,9 @@ namespace Fighter.InputSystem {
                     break;
             }
 
-            // exclusive: if taking defensive intent, do not also enqueue attacks
             if (intent == "Block" || intent == "Dodge" || intent == "Tech") {
-                // keep only defense flags in commands
+                // defense-only frame
             } else {
-                // movement intents keep moveX; attacks are already enqueued via Normal channel
                 smoothedMoveX = Mathf.MoveTowards(smoothedMoveX, targetMoveX, moveSmooth * Time.deltaTime);
                 if (state == AIState.Retreat && retreatTimer > 0f) smoothedMoveX = -Mathf.Sign(dx);
                 commands.moveX = smoothedMoveX;
@@ -181,8 +179,8 @@ namespace Fighter.InputSystem {
         }
 
         bool IsOpponentVulnerable(FighterController opp) {
-            if (!opp || opp.StateMachine == null || opp.StateMachine.Current == null) return false;
-            string n = opp.StateMachine.Current.Name;
+            if (!opp) return false;
+            string n = opp.GetCurrentStateName();
             return n.StartsWith("Downed") || n == "Wakeup";
         }
 
@@ -198,7 +196,5 @@ namespace Fighter.InputSystem {
         float ScoreRetreat(float dist) => Mathf.Clamp01((attackRange - dist) / attackRange) * 0.2f;
         float ScoreJumpIn(bool oppAir, float dist) => (jumpCd <= 0 && !oppAir && dist > attackRange * 0.9f) ? 0.4f : 0f;
         float ScoreAntiAir(bool oppAir, float dist) => (oppAir && dist < antiAirRange) ? 0.8f : 0f;
-        float ScorePressure(bool oppThreat, float dist) => (!oppThreat && dist <= attackRange) ? 0.7f : 0.2f;
-        float ScoreSuper(bool can, float dist) => can && dist <= attackRange ? 0.9f : 0f;
     }
 }
