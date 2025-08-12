@@ -15,6 +15,8 @@ namespace UI {
             public Text timer;
             public Text hint;
             public Text resultText;
+            public Text state1, state2;
+            public Text hpNum1, hpNum2, meterNum1, meterNum2;
         }
 
         public static HUDRefs Create(Transform parent, FighterController p1, FighterController p2) {
@@ -32,17 +34,31 @@ namespace UI {
             BindHpAndMeter(p1, p2, refs.hp1, refs.hp2, refs.meter1, refs.meter2);
 
             // add compact numeric labels and state texts
-            CreateValueTexts(root, refs.hp1, p1, true);
-            CreateValueTexts(root, refs.hp2, p2, false);
-            CreateMeterValueText(root, refs.meter1, p1, true);
-            CreateMeterValueText(root, refs.meter2, p2, false);
-            CreateStateText(root, p1, true);
-            CreateStateText(root, p2, false);
+            refs.hpNum1 = CreateValueTexts(root, refs.hp1, p1, true);
+            refs.hpNum2 = CreateValueTexts(root, refs.hp2, p2, false);
+            refs.meterNum1 = CreateMeterValueText(root, refs.meter1, p1, true);
+            refs.meterNum2 = CreateMeterValueText(root, refs.meter2, p2, false);
+            refs.state1 = CreateStateText(root, p1, true);
+            refs.state2 = CreateStateText(root, p2, false);
 
-            // Result overlay text only; panel optional
             refs.resultText = CreateResultOverlay(root);
 
+            ApplyConfigVisibility(refs);
+            Systems.RuntimeConfig.Instance.OnConfigChanged += () => ApplyConfigVisibility(refs);
+
             return refs;
+        }
+
+        static void ApplyConfigVisibility(HUDRefs r) {
+            var cfg = Systems.RuntimeConfig.Instance;
+            bool debug = cfg && cfg.uiMode == Systems.UIMode.Debug;
+            if (r.state1) r.state1.gameObject.SetActive(debug && cfg.showStateTexts);
+            if (r.state2) r.state2.gameObject.SetActive(debug && cfg.showStateTexts);
+            if (r.hpNum1) r.hpNum1.gameObject.SetActive(debug && cfg.showNumericBars);
+            if (r.hpNum2) r.hpNum2.gameObject.SetActive(debug && cfg.showNumericBars);
+            if (r.meterNum1) r.meterNum1.gameObject.SetActive(debug && cfg.showNumericBars);
+            if (r.meterNum2) r.meterNum2.gameObject.SetActive(debug && cfg.showNumericBars);
+            var dh = Object.FindObjectOfType<UI.DebugHUD>(); if (dh) dh.gameObject.SetActive(debug && cfg.showDebugHUD);
         }
 
         static Canvas CreateCanvas(Transform parent, out CanvasScaler scaler) {
@@ -63,7 +79,6 @@ namespace UI {
             var s = CreateSlider(root, pos, anchor, color);
             s.gameObject.AddComponent<SafeAreaClamp>().margin = new Vector2(24,24);
             if (!left) s.direction = Slider.Direction.RightToLeft;
-            // add small label tag "P1 HP"/"P2 HP"
             var tag = CreateText(s.transform, left ? "P1 HP" : "P2 HP", new Vector2(left? -220f: 220f, 0f), new Vector2(left?0f:1f,0.5f), 12, left? TextAnchor.MiddleLeft: TextAnchor.MiddleRight);
             tag.color = new Color(1,1,1,0.7f);
             return s;
@@ -141,28 +156,31 @@ namespace UI {
             return f;
         }
 
-        static void CreateStateText(Transform root, FighterController f, bool left) {
+        static Text CreateStateText(Transform root, FighterController f, bool left) {
             var anchor = new Vector2(left ? 0f : 1f, 1f);
             var pos = new Vector2(left ? 120f : -120f, -110f);
             var t = CreateText(root, "", pos, anchor, 18, left ? TextAnchor.UpperLeft : TextAnchor.UpperRight);
             t.gameObject.AddComponent<SafeAreaClamp>().margin = new Vector2(24,24);
             var bind = t.gameObject.AddComponent<StateTextBinder>(); bind.fighter = f; bind.text = t; bind.format = left ? "P1 {state} {move}" : "P2 {state} {move}";
+            return t;
         }
 
-        static void CreateValueTexts(Transform root, Slider bar, FighterController f, bool left) {
+        static Text CreateValueTexts(Transform root, Slider bar, FighterController f, bool left) {
             var anchor = new Vector2(left ? 0f : 1f, 1f);
             var pos = new Vector2(left ? 370f : -370f, -72f);
             var t = CreateText(root, "", pos, anchor, 16, left ? TextAnchor.UpperLeft : TextAnchor.UpperRight);
             t.gameObject.AddComponent<SafeAreaClamp>().margin = new Vector2(24,24);
             var binder = t.gameObject.AddComponent<HpTextBinder>(); binder.fighter = f; binder.text = t;
+            return t;
         }
 
-        static void CreateMeterValueText(Transform root, Slider meter, FighterController f, bool left) {
+        static Text CreateMeterValueText(Transform root, Slider meter, FighterController f, bool left) {
             var anchor = new Vector2(left ? 0f : 1f, 1f);
             var pos = new Vector2(left ? 370f : -370f, -112f);
             var t = CreateText(root, "", pos, anchor, 14, left ? TextAnchor.UpperLeft : TextAnchor.UpperRight);
             t.gameObject.AddComponent<SafeAreaClamp>().margin = new Vector2(24,24);
             var binder = t.gameObject.AddComponent<MeterTextBinder>(); binder.fighter = f; binder.text = t;
+            return t;
         }
     }
 }
