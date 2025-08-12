@@ -26,19 +26,18 @@ namespace Fighter {
 
             if (commandQueue.TryPeekNormal(out var tok)) {
                 if (tok == CommandToken.Light || tok == CommandToken.Heavy) {
-                    string currentName = fighter.StateMachine?.Current?.Name ?? string.Empty;
-                    bool inAttack = currentName.StartsWith("Attack");
                     commandQueue.TryDequeueNormal(out _);
+                    var stateName = fighter.GetCurrentStateName();
+                    bool inAttack = stateName.StartsWith("Attack");
                     if (inAttack) {
                         fighter.RequestComboCancel(tok == CommandToken.Light ? "Light" : "Heavy");
                     } else {
-                        if (tok == CommandToken.Light) fighter.StateMachine.SetState(fighter.AttackLight);
-                        else fighter.StateMachine.SetState(fighter.AttackHeavy);
+                        fighter.EnterAttackHFSM(tok == CommandToken.Light ? "Light" : "Heavy");
                     }
                 } else if (tok == CommandToken.Throw) {
                     commandQueue.TryDequeueNormal(out _);
                     if (fighter.opponent && Vector2.Distance(fighter.transform.position, fighter.opponent.position) < 1.0f) {
-                        fighter.StateMachine.SetState(fighter.Throw);
+                        fighter.EnterThrowHFSM();
                         var opp = fighter.opponent.GetComponent<FighterController>();
                         fighter.ApplyThrowOn(opp);
                     }

@@ -31,8 +31,7 @@ namespace Fighter.Core {
             if (!res.wasBlocked) {
                 var rb = fighter.rb; rb.velocity = new Vector2(dir * info.knockback.x, info.knockback.y);
                 if (AnimatorReady()) animator.SetTrigger("Hit");
-                fighter.Hitstun.Begin(res.appliedStun);
-                fighter.StateMachine.SetState(fighter.Hitstun);
+                fighter.EnterHitstunHFSM(res.appliedStun);
 
                 // attacker feedback
                 attacker.OnHitConfirmedLocal(res.appliedHitstop);
@@ -46,8 +45,7 @@ namespace Fighter.Core {
                 if (fighter.currentHealth < before) { fighter.RaiseDamaged(attacker); }
             } else {
                 if (AnimatorReady()) animator.SetTrigger("BlockHit");
-                fighter.Hitstun.Begin(res.appliedStun);
-                fighter.StateMachine.SetState(fighter.Hitstun);
+                fighter.EnterHitstunHFSM(res.appliedStun);
 
                 // attacker feedback
                 attacker.OnHitConfirmedLocal(res.appliedHitstop);

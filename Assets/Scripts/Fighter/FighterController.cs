@@ -243,6 +243,34 @@ namespace Fighter {
             }
         }
 
+        // HFSM helpers
+        public string GetCurrentStateName() { return HMachine != null && HMachine.Current != null ? HMachine.Current.Name : (StateMachine?.Current?.Name ?? string.Empty); }
+        public void EnterAttackHFSM(string trigger) {
+            if (HMachine == null || HRoot == null) { if (trigger == "Light") StateMachine.SetState(AttackLight); else StateMachine.SetState(AttackHeavy); return; }
+            var loc = HRoot.Locomotion;
+            Fighter.HFSM.AttackState target = null;
+            if (IsGrounded()) target = (trigger == "Light") ? loc.Grounded.AttackLight : loc.Grounded.AttackHeavy;
+            else target = (trigger == "Light") ? loc.Air.AirLight : loc.Air.AirHeavy;
+            HMachine.ChangeState(target);
+        }
+        public void EnterThrowHFSM() { if (HMachine == null) { StateMachine.SetState(Throw); return; } HMachine.ChangeState(HRoot.Locomotion.Grounded.Throw); }
+        public void EnterBlockHFSM() { if (HMachine == null) { StateMachine.SetState(Block); return; } HMachine.ChangeState(HRoot.Locomotion.Grounded.Block); }
+        public void EnterCrouchHFSM() { if (HMachine == null) { StateMachine.SetState(Crouch); return; } HMachine.ChangeState(HRoot.Locomotion.Grounded.Crouch); }
+        public void EnterDodgeHFSM() { if (HMachine == null) { StateMachine.SetState(Dodge); return; } HMachine.ChangeState(HRoot.Locomotion.Grounded.Dodge); }
+        public void EnterHitstunHFSM(float seconds) {
+            if (HMachine == null || HRoot == null) { Hitstun.Begin(seconds); StateMachine.SetState(Hitstun); return; }
+            var loc = HRoot.Locomotion;
+            var hs = IsGrounded() ? loc.Grounded.Hitstun : loc.Air.Hitstun;
+            hs.Begin(seconds);
+            HMachine.ChangeState(hs);
+        }
+        public void EnterDownedHFSM(bool hard, float duration) {
+            if (HMachine == null || HRoot == null) { StateMachine.SetState(KO); return; }
+            var loc = HRoot.Locomotion;
+            var dn = loc.Grounded.Downed; // simple for now
+            HMachine.ChangeState(dn);
+        }
+
         private void FixedUpdate() {
             if (IsFrozen()) return;
             if (Mathf.Abs(externalImpulseX) > 0.0001f) {
@@ -395,18 +423,15 @@ namespace Fighter {
             if (!res.wasBlocked) {
                 rb.velocity = new Vector2(dir * info.knockback.x, info.knockback.y);
                 if (AnimatorReady()) animator.SetTrigger("Hit");
-                // Knockdown routing (with player passive prevention)
                 bool requestKD = info.knockdownKind == Combat.KnockdownKind.Soft || info.knockdownKind == Combat.KnockdownKind.Hard;
                 if (requestKD && team == FighterTeam.Player && stats != null && stats.preventKnockdownIfMeter && meter >= stats.preventKnockdownMeterCost) {
-                    meter -= stats.preventKnockdownMeterCost; requestKD = false; // consume meter to prevent KD
+                    meter -= stats.preventKnockdownMeterCost; requestKD = false;
                 }
                 if (requestKD) {
                     float downDur = info.knockdownKind == Combat.KnockdownKind.Hard ? (stats != null ? stats.hardKnockdownTime : 1.0f) : (stats != null ? stats.softKnockdownTime : 0.6f);
-                    Downed.Begin(info.knockdownKind == Combat.KnockdownKind.Hard, downDur);
-                    StateMachine.SetState(Downed);
+                    EnterDownedHFSM(info.knockdownKind == Combat.KnockdownKind.Hard, downDur);
                 } else {
-                    Hitstun.Begin(res.appliedStun);
-                    StateMachine.SetState(Hitstun);
+                    EnterHitstunHFSM(res.appliedStun);
                 }
 
                 attacker.OnHitConfirmedLocal(res.appliedHitstop);
@@ -417,8 +442,7 @@ namespace Fighter {
                 if (currentHealth < before) { OnDamaged?.Invoke(this); OnAnyDamage?.Invoke(this, attacker); }
             } else {
                 if (AnimatorReady()) animator.SetTrigger("BlockHit");
-                Hitstun.Begin(res.appliedStun);
-                StateMachine.SetState(Hitstun);
+                EnterHitstunHFSM(res.appliedStun);
 
                 attacker.OnHitConfirmedLocal(res.appliedHitstop);
                 attacker.AddMeter(attacker.CurrentMove ? attacker.CurrentMove.meterOnBlock : 10);
