@@ -27,7 +27,8 @@ namespace Fighter.States {
             if ((c.jump && fighter.CanJump()) || (fighter.GetComponent<JumpRule>()?.ShouldConsumeBufferedJump(fighter.IsGrounded()) ?? false)) { fighter.DoJump(); fighter.StateMachine.SetState(fighter.PreJump); return; }
             if (c.light) { if (fighter.IsOpponentInThrowRange(1.0f)) { fighter.StateMachine.SetState(fighter.Throw); return; } fighter.StateMachine.SetState(fighter.AttackLight); return; }
             if (c.heavy) { fighter.StateMachine.SetState(fighter.AttackHeavy); return; }
-            if (HasMoveInput(out float x)) fighter.Move(x); else fighter.HaltHorizontal();
+            if (HasMoveInput(out float _)) { fighter.StateMachine.SetState(fighter.Walk); return; }
+            fighter.HaltHorizontal();
         }
     }
 

@@ -63,6 +63,9 @@ namespace UI {
             var s = CreateSlider(root, pos, anchor, color);
             s.gameObject.AddComponent<SafeAreaClamp>().margin = new Vector2(24,24);
             if (!left) s.direction = Slider.Direction.RightToLeft;
+            // add small label tag "P1 HP"/"P2 HP"
+            var tag = CreateText(s.transform, left ? "P1 HP" : "P2 HP", new Vector2(left? -220f: 220f, 0f), new Vector2(left?0f:1f,0.5f), 12, left? TextAnchor.MiddleLeft: TextAnchor.MiddleRight);
+            tag.color = new Color(1,1,1,0.7f);
             return s;
         }
 
@@ -72,6 +75,8 @@ namespace UI {
             var s = CreateSlider(root, pos, anchor, new Color(0.2f,0.8f,0.2f,0.9f));
             s.gameObject.AddComponent<SafeAreaClamp>().margin = new Vector2(24,24);
             if (!left) s.direction = Slider.Direction.RightToLeft;
+            var tag = CreateText(s.transform, left ? "P1 Meter" : "P2 Meter", new Vector2(left? -220f: 220f, 0f), new Vector2(left?0f:1f,0.5f), 12, left? TextAnchor.MiddleLeft: TextAnchor.MiddleRight);
+            tag.color = new Color(1,1,1,0.7f);
             return s;
         }
 
