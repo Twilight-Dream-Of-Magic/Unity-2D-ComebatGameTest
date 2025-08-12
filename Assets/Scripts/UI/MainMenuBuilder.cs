@@ -29,8 +29,9 @@ namespace UI {
 
             CreateDifficulty(root, new Vector2(0, -120));
             CreateVolumeSliders(root, new Vector2(0, -220));
+            CreateUIMode(root, new Vector2(0, -280));
 
-            CreateButton(root, new Vector2(0, -320), "Quit", () => {
+            CreateButton(root, new Vector2(0, -340), "Quit", () => {
                 var mm = CreateOrGet<MainMenuController>();
                 mm.Quit();
             });
@@ -50,6 +51,7 @@ namespace UI {
                 am.bgmSource = go.AddComponent<AudioSource>();
                 am.sfxSource = go.AddComponent<AudioSource>();
             }
+            if (!FindObjectOfType<RuntimeConfig>()) new GameObject("RuntimeConfig").AddComponent<RuntimeConfig>();
         }
 
         void EnsureEventSystem() {
@@ -82,6 +84,18 @@ namespace UI {
             dd.options.Clear(); dd.options.Add(new Dropdown.OptionData("Easy")); dd.options.Add(new Dropdown.OptionData("Normal")); dd.options.Add(new Dropdown.OptionData("Hard"));
             dd.value = (int)(GameManager.Instance ? GameManager.Instance.difficulty : Difficulty.Normal);
             dd.onValueChanged.AddListener(i => GameManager.Instance?.SetDifficulty(i));
+        }
+
+        void CreateUIMode(Transform root, Vector2 pos) {
+            var label = CreateText(root, "UI Mode", pos + new Vector2(-180, 0), new Vector2(0.5f, 1f), 22, TextAnchor.MiddleRight);
+            var go = new GameObject("UIMode", typeof(RectTransform), typeof(Image), typeof(Dropdown));
+            go.transform.SetParent(root, false);
+            var rt = go.GetComponent<RectTransform>(); rt.sizeDelta = new Vector2(240, 36); rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f); rt.pivot = new Vector2(0.5f, 0.5f); rt.anchoredPosition = pos + new Vector2(80, 0);
+            var dd = go.GetComponent<Dropdown>();
+            dd.options.Clear(); dd.options.Add(new Dropdown.OptionData("Release")); dd.options.Add(new Dropdown.OptionData("Debug"));
+            var cfg = RuntimeConfig.Instance;
+            dd.value = cfg && cfg.uiMode == Systems.UIMode.Debug ? 1 : 0;
+            dd.onValueChanged.AddListener(i => RuntimeConfig.Instance?.SetUIMode(i == 1 ? Systems.UIMode.Debug : Systems.UIMode.Release));
         }
 
         void CreateVolumeSliders(Transform root, Vector2 startPos) {

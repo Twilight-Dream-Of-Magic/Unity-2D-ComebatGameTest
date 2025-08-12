@@ -41,6 +41,7 @@ namespace Fighter.HFSM {
         public AttackState AttackHeavy { get; private set; }
         public HitstunState Hitstun { get; private set; }
         public DownedState Downed { get; private set; }
+        public WakeupState Wakeup { get; private set; }
         public DodgeState Dodge { get; private set; }
         public ThrowState Throw { get; private set; }
         public GroundedState(FighterController f, HState parent) : base(f, parent) {
@@ -53,6 +54,7 @@ namespace Fighter.HFSM {
             AttackHeavy = new AttackState(f, this, "Heavy");
             Hitstun = new HitstunState(f, this);
             Downed = new DownedState(f, this);
+            Wakeup = new WakeupState(f, this);
             Dodge = new DodgeState(f, this);
             Throw = new ThrowState(f, this);
         }
@@ -208,7 +210,49 @@ namespace Fighter.HFSM {
         }
     }
 
-    public class DownedState : HState { public DownedState(FighterController f, HState p) : base(f, p) { } public override string Name => "Downed"; }
+    public class DownedState : HState {
+        float timer; bool hard;
+        public DownedState(FighterController f, HState p) : base(f, p) { }
+        public override string Name => hard ? "Downed(Hard)" : "Downed(Soft)";
+        public void Begin(bool isHard, float duration) { hard = isHard; timer = duration; }
+        public override void OnEnter() { Fighter.SetAnimatorBool("Downed", true); }
+        public override void OnExit() { Fighter.SetAnimatorBool("Downed", false); }
+        public override void OnTick() {
+            timer -= Time.deltaTime;
+            if (timer <= 0f) {
+                var g = Parent as GroundedState;
+                g.Machine.ChangeState(g.Wakeup);
+            }
+        }
+    }
+
+    public class WakeupState : HState {
+        float timer;
+        public WakeupState(FighterController f, HState p) : base(f, p) { }
+        public override string Name => "Wakeup";
+        public override void OnEnter() {
+            timer = Fighter.stats != null ? Fighter.stats.wakeupInvuln : 0.25f;
+            Fighter.SetUpperLowerInvuln(true, true);
+            if (Fighter.animator && Fighter.animator.runtimeAnimatorController) Fighter.animator.SetTrigger("Wakeup");
+        }
+        public override void OnExit() { Fighter.SetUpperLowerInvuln(false, false); }
+        public override void OnTick() {
+            timer -= Time.deltaTime;
+            // allow quick direction adjustment during first half
+            var c = Fighter.PendingCommands;
+            float half = (Fighter.stats != null ? Fighter.stats.wakeupInvuln : 0.25f) * 0.5f;
+            if (timer > 0 && timer > (Fighter.stats != null ? Fighter.stats.wakeupInvuln : 0.25f) - half) {
+                float dir = 0f;
+                if (c.moveX > 0.4f) dir = Fighter.facingRight ? 1f : -1f; // forward roll
+                else if (c.moveX < -0.4f) dir = Fighter.facingRight ? -1f : 1f; // backrise
+                if (Mathf.Abs(dir) > 0.1f) Fighter.AddExternalImpulse(dir * 0.12f);
+            }
+            if (timer <= 0f) {
+                var g = Parent as GroundedState;
+                g.Machine.ChangeState(g.Idle);
+            }
+        }
+    }
 
     public class DodgeState : HState {
         float timer;

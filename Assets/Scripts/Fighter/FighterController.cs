@@ -180,8 +180,14 @@ namespace Fighter {
         }
         public void EnterDownedHFSM(bool hard, float duration) {
             var loc = HRoot.Locomotion;
-            var dn = loc.Grounded.Downed; // TODO: hard/soft variants
+            var dn = loc.Grounded.Downed;
+            dn.Begin(hard, duration);
             HMachine.ChangeState(dn);
+            TryShowWakeupHint();
+        }
+        void TryShowWakeupHint() {
+            var hint = UnityEngine.Object.FindObjectOfType<UI.ControlsHintBinder>();
+            if (hint) { hint.showWakeupTip = true; if (hint.text) { hint.text.text += "\n" + hint.wakeupTip; } }
         }
 
         private void FixedUpdate() {
