@@ -71,18 +71,17 @@ namespace Dev {
         FighterController CreatePlayerFighter(Vector3 pos) {
             var fc = CreateFighterCore("Player", pos, new Color(0.2f, 0.6f, 1f, 1f));
             fc.team = FighterTeam.Player;
-            // New input pipeline: PlayerInputSource + InputDriver
             if (!demoScripted) {
                 var src = fc.gameObject.AddComponent<Fighter.InputSystem.PlayerInputSource>();
                 fc.gameObject.AddComponent<Fighter.InputSystem.InputDriver>();
-                // ensure no AI source on player
+                // ensure no other input sources remain enabled
+                var scripted = fc.GetComponent<Fighter.InputSystem.ScriptedInputSource>(); if (scripted) scripted.enabled = false;
                 var ai = fc.GetComponent<Fighter.InputSystem.AIInputSource>(); if (ai) ai.enabled = false;
             } else {
                 var src = fc.gameObject.AddComponent<Fighter.InputSystem.ScriptedInputSource>();
                 fc.gameObject.AddComponent<Fighter.InputSystem.InputDriver>();
-                fc.meter = fc.maxMeter; // ensure enough meter for Super showcase
+                fc.meter = fc.maxMeter;
             }
-            // dash resolver
             if (!fc.gameObject.GetComponent<Combat.CommandQueue>()) fc.gameObject.AddComponent<Combat.CommandQueue>();
             fc.gameObject.AddComponent<Fighter.InputSystem.MovementDashResolver>();
             AttachSpecials(fc);
@@ -92,13 +91,11 @@ namespace Dev {
         FighterController CreateAIFighter(Vector3 pos) {
             var fc = CreateFighterCore("Enemy(AI)", pos, new Color(1f, 0.4f, 0.3f, 1f));
             fc.team = FighterTeam.AI;
-            // New input pipeline: AIInputSource + InputDriver
             var aiSrc = fc.gameObject.AddComponent<Fighter.InputSystem.AIInputSource>();
             var normal = ScriptableObject.CreateInstance<AIConfig>();
             normal.blockProbability = 0.2f; normal.attackCooldownRange = new Vector2(0.6f, 1.2f); normal.approachDistance = 2.2f; normal.retreatDistance = 1.0f;
             aiSrc.normal = normal; aiSrc.easy = normal; aiSrc.hard = normal; aiSrc.fighter = fc;
             fc.gameObject.AddComponent<Fighter.InputSystem.InputDriver>();
-            // dash resolver
             if (!fc.gameObject.GetComponent<Combat.CommandQueue>()) fc.gameObject.AddComponent<Combat.CommandQueue>();
             fc.gameObject.AddComponent<Fighter.InputSystem.MovementDashResolver>();
             AttachSpecials(fc);
@@ -113,7 +110,6 @@ namespace Dev {
             var cap = go.AddComponent<CapsuleCollider2D>(); cap.direction = CapsuleDirection2D.Vertical; cap.size = new Vector2(0.6f, 1.8f);
 
             var fc = go.AddComponent<FighterController>();
-            // attach new core components (non-invasive, controller will delegate when present)
             var loco = go.AddComponent<Fighter.Core.FighterLocomotion>();
             var atk = go.AddComponent<Fighter.Core.AttackExecutor>();
             var recv = go.AddComponent<Fighter.Core.DamageReceiver>();
@@ -124,21 +120,19 @@ namespace Dev {
             stats.blockDamageRatio = 0.2f; stats.dodgeDuration = 0.25f; stats.dodgeInvuln = 0.2f; stats.hitStop = 0.06f;
             fc.stats = stats;
 
-            // Ensure Animator exists
             if (!go.TryGetComponent<Animator>(out var anim)) anim = go.AddComponent<Animator>();
 
             var vis = new GameObject("Visual"); vis.transform.SetParent(go.transform, false);
             var sr = vis.AddComponent<SpriteRenderer>(); sr.sprite = CreateSolidSprite(color);
             vis.transform.localScale = new Vector3(0.8f, 1.8f, 1f);
 
-            // Moves (tuning: faster startup/active for snappier response)
             var light = ScriptableObject.CreateInstance<MoveData>();
             light.moveId = "Light"; light.triggerName = "Light"; light.startup = 0.05f; light.active = 0.04f; light.recovery = 0.12f;
             light.damage = 8; light.hitstun = 0.12f; light.blockstun = 0.08f; light.hitstopOnHit = 0.06f; light.hitstopOnBlock = 0.04f;
             light.knockback = new Vector2(2.2f, 1.8f); light.pushbackOnHit = 0.35f; light.pushbackOnBlock = 0.5f; light.meterOnHit = 50; light.meterOnBlock = 20; light.canCancelOnHit = true; light.canCancelOnBlock = true; light.canCancelOnWhiff = true; light.onWhiffCancelWindow = new Vector2(0.0f, 0.12f); light.onHitCancelWindow = new Vector2(0.0f, 0.25f); light.onBlockCancelWindow = new Vector2(0.0f, 0.18f); light.cancelIntoTriggers = new[]{"Light","Heavy","Super"};
 
             var heavy = ScriptableObject.CreateInstance<MoveData>();
-             heavy.moveId = "Heavy"; heavy.triggerName = "Heavy"; heavy.startup = 0.12f; heavy.active = 0.05f; heavy.recovery = 0.22f;
+            heavy.moveId = "Heavy"; heavy.triggerName = "Heavy"; heavy.startup = 0.12f; heavy.active = 0.05f; heavy.recovery = 0.22f;
             heavy.damage = 18; heavy.hitstun = 0.2f; heavy.blockstun = 0.12f; heavy.hitstopOnHit = 0.1f; heavy.hitstopOnBlock = 0.06f;
             heavy.knockback = new Vector2(3.2f, 2.2f); heavy.pushbackOnHit = 0.9f; heavy.pushbackOnBlock = 1.0f; heavy.meterOnHit = 90; heavy.meterOnBlock = 40; heavy.canCancelOnHit = true; heavy.canCancelOnBlock = false; heavy.knockdownKind = Combat.KnockdownKind.Soft; heavy.cancelIntoTriggers = new[]{"Super"};
 
@@ -158,7 +152,6 @@ namespace Dev {
             fc.hurtboxes[2] = CreateHurtbox(hurtRoot.transform, "Legs", HurtRegion.Legs, new Vector2(0.5f, 0.6f), new Vector2(0, -0.4f));
             foreach (var hb in fc.hurtboxes) hb.owner = fc;
 
-            // Hitboxes (larger and further reach to ensure contact)
             var hitRoot = new GameObject("Hitboxes"); hitRoot.transform.SetParent(go.transform, false);
             fc.hitboxes = new Hitbox[2];
             fc.hitboxes[0] = CreateHitbox(hitRoot.transform, "Light1", new Vector2(1.3f, 1.0f), new Vector2(1.1f, 0.5f));
@@ -172,14 +165,11 @@ namespace Dev {
             p1.opponent = p2.transform; p2.opponent = p1.transform;
             var fr = Camera.main ? Camera.main.GetComponent<Systems.CameraFramer>() : null;
             if (fr) { fr.targetA = p1.transform; fr.targetB = p2.transform; fr.arenaHalfExtents = arenaHalfExtents; }
-            // Ensure pushboxes
             if (!p1.GetComponent<Combat.Pushbox>()) p1.gameObject.AddComponent<Combat.Pushbox>();
             if (!p2.GetComponent<Combat.Pushbox>()) p2.gameObject.AddComponent<Combat.Pushbox>();
-            // Set posture flags for hurtboxes (simple defaults)
             foreach (var hb in p1.GetComponentsInChildren<Combat.Hurtbox>(true)) { hb.activeStanding = true; hb.activeCrouching = hb.region != Combat.HurtRegion.Head; hb.activeAirborne = hb.region != Combat.HurtRegion.Legs; }
             foreach (var hb in p2.GetComponentsInChildren<Combat.Hurtbox>(true)) { hb.activeStanding = true; hb.activeCrouching = hb.region != Combat.HurtRegion.Head; hb.activeAirborne = hb.region != Combat.HurtRegion.Legs; }
 
-            // UI hints
             var hints = GameObject.FindObjectOfType<UI.ControlsHintBinder>();
             if (hints) { hints.showWakeupTip = true; hints.showTechTip = true; }
         }

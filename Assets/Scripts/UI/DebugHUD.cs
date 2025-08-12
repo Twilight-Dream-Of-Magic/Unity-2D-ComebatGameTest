@@ -25,6 +25,19 @@ namespace UI {
         /// <summary>When true, show frame data details (startup/active/recovery/advantage).</summary>
         public bool showDetails = false; // compact by default
 
+        string _lastDamageMsg;
+
+        private void OnEnable() {
+            Fighter.FighterController.OnAnyDamage += OnAnyDamage;
+        }
+        private void OnDisable() {
+            Fighter.FighterController.OnAnyDamage -= OnAnyDamage;
+        }
+
+        void OnAnyDamage(Fighter.FighterController victim, Fighter.FighterController attacker) {
+            _lastDamageMsg = $"Hit: {(attacker.team==Fighter.FighterTeam.Player?"P1":"P2")} -> {(victim.team==Fighter.FighterTeam.Player?"P1":"P2")}";
+        }
+
         private void Reset() {
             if (fighter == null) fighter = FindObjectOfType<Fighter.FighterController>();
             if (inputBuffer == null && fighter != null) inputBuffer = fighter.GetComponent<InputBuffer>();
@@ -52,8 +65,11 @@ namespace UI {
                 }
             }
 
-            if (p1 && p2) stateText.text = BuildLine(p1) + "\n" + BuildLine(p2);
-            else if (p1) stateText.text = BuildLine(p1);
+            var msg = string.Empty;
+            if (!string.IsNullOrEmpty(_lastDamageMsg)) msg = "\n" + _lastDamageMsg;
+
+            if (p1 && p2) stateText.text = BuildLine(p1) + "\n" + BuildLine(p2) + msg;
+            else if (p1) stateText.text = BuildLine(p1) + msg;
 
             if (inputText && inputBuffer) {
                 inputText.text = "";
