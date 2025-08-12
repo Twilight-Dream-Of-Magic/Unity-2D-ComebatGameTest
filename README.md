@@ -10,6 +10,11 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
 - UI: health bars, round timer, win/lose flow (code-driven HUD via HUDFactory)
 - Audio hooks and simple VFX placeholders
 
+## Recent Fixes
+- Auto-bind `Hitbox.owner` and `Hurtbox.owner` at runtime when not wired in Inspector (prevents hits from being ignored and ensures AI/player damage routes correctly).
+- Player input now sets `J/K` directly into the per-frame command snapshot in addition to enqueuing tokens (so light/heavy attacks work even without the queue feeder).
+- `AttackExecutor` ensures hitboxes are discovered and owner-bound on `Awake`.
+
 ## Repo Structure
 - `Assets/` (created after opening Unity)
   - `Scripts/`
@@ -67,8 +72,6 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
 
 ## Git & Branching
 - `main`: stable
-- `dev`: active development
-- Use feature branches and PRs for daily progress
 
 ## License
 MIT

@@ -151,6 +151,9 @@ namespace Fighter {
             srVisual = GetComponentInChildren<SpriteRenderer>();
             if (srVisual != null) { srHasVisual = true; srDefaultColor = srVisual.color; }
 
+            // auto-discover hitboxes/hurtboxes if not assigned in inspector
+            if (hurtboxes == null || hurtboxes.Length == 0) hurtboxes = GetComponentsInChildren<Hurtbox>(true);
+            if (hitboxes == null || hitboxes.Length == 0) hitboxes = GetComponentsInChildren<Hitbox>(true);
             if (hurtboxes != null) foreach (var h in hurtboxes) if (h != null) h.owner = this;
             if (hitboxes != null) foreach (var h in hitboxes) if (h != null) h.owner = this;
 

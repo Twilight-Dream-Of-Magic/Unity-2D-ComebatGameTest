@@ -20,6 +20,10 @@ namespace Fighter.Core {
             if (!fighter) fighter = GetComponent<FighterController>();
             if (!animator) animator = GetComponent<Animator>();
             if (hitboxes == null || hitboxes.Length == 0) hitboxes = GetComponentsInChildren<Combat.Hitbox>(true);
+            // ensure owner binding for all hitboxes
+            if (hitboxes != null) {
+                foreach (var hb in hitboxes) if (hb != null && hb.owner == null) hb.owner = fighter;
+            }
             CacheOriginals();
         }
 

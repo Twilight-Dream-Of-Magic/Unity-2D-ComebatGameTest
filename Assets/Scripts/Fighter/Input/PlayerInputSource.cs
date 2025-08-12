@@ -48,8 +48,8 @@ namespace Fighter.InputSystem {
                 moveX = Input.GetAxisRaw("Horizontal") * horizontalScale,
                 jump = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow),
                 crouch = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow),
-                light = false,
-                heavy = false,
+                light = jDown,
+                heavy = kDown,
                 block = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift),
                 dodge = Input.GetKeyDown(KeyCode.L) || Input.GetKeyDown(KeyCode.RightControl) || Input.GetKeyDown(KeyCode.LeftControl)
             };
