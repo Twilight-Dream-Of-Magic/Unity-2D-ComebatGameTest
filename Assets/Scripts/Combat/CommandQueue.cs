@@ -5,9 +5,14 @@ using System;
 namespace Combat {
     public class CommandQueue : MonoBehaviour {
         public float bufferWindow = 0.25f;
+        public Data.InputTuningConfig tuning;
         readonly Queue<(CommandToken token, float time)> queueNormal = new();
         readonly Queue<(CommandToken token, float time)> queueCombo = new();
         public event Action<CommandToken> OnEnqueued;
+
+        void Awake() {
+            if (tuning) bufferWindow = tuning.commandBufferWindow;
+        }
 
         // Legacy API maps to Normal channel
         public void Enqueue(CommandToken token) { EnqueueNormal(token); }

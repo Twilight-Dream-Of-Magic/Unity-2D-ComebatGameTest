@@ -1,9 +1,9 @@
 using UnityEngine;
 using Combat;
 
-namespace Fighter {
+namespace Fighter.InputSystem {
     [DefaultExecutionOrder(50)]
-    public class CommandQueueFeeder : MonoBehaviour {
+    public class PlayerCommandFeeder : MonoBehaviour {
         public FighterController fighter;
         public CommandQueue commandQueue;
 
@@ -29,11 +29,8 @@ namespace Fighter {
                     commandQueue.TryDequeueNormal(out _);
                     var stateName = fighter.GetCurrentStateName();
                     bool inAttack = stateName.StartsWith("Attack");
-                    if (inAttack) {
-                        fighter.RequestComboCancel(tok == CommandToken.Light ? "Light" : "Heavy");
-                    } else {
-                        fighter.EnterAttackHFSM(tok == CommandToken.Light ? "Light" : "Heavy");
-                    }
+                    if (inAttack) fighter.RequestComboCancel(tok == CommandToken.Light ? "Light" : "Heavy");
+                    else fighter.EnterAttackHFSM(tok == CommandToken.Light ? "Light" : "Heavy");
                 } else if (tok == CommandToken.Throw) {
                     commandQueue.TryDequeueNormal(out _);
                     if (fighter.opponent && Vector2.Distance(fighter.transform.position, fighter.opponent.position) < 1.0f) {

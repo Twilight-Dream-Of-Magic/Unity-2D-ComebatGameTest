@@ -9,6 +9,7 @@ namespace Fighter {
         public CommandQueue commandQueue;
         public SpecialMoveSet specialSet;
         public float historyLifetime = 0.8f;
+        public InputTuningConfig tuning;
 
         readonly List<(CommandToken tok, float t)> history = new();
 
@@ -16,6 +17,7 @@ namespace Fighter {
             if (!fighter) fighter = GetComponent<FighterController>();
             if (!commandQueue) commandQueue = GetComponent<CommandQueue>();
             if (commandQueue) commandQueue.OnEnqueued += OnToken;
+            if (tuning) historyLifetime = tuning.specialHistoryLifetime;
         }
 
         void OnDestroy() {
@@ -36,7 +38,7 @@ namespace Fighter {
         void TryMatch() {
             if (!fighter || specialSet == null || specialSet.specials == null) return;
             foreach (var sp in specialSet.specials) {
-                if (MatchTail(sp.sequence, sp.maxWindowSeconds)) {
+                if (MatchTail(sp.sequence, sp.maxWindowSeconds > 0 ? sp.maxWindowSeconds : (tuning ? tuning.defaultSpecialWindowSeconds : 0.6f))) {
                     fighter.RequestComboCancel(sp.triggerName);
                     history.Clear();
                     break;
@@ -53,7 +55,7 @@ namespace Fighter {
                 if (now - h.t > window) return false;
                 if (h.tok == seq[idx]) idx--;
             }
-            return idx < 0; // all matched in order within window
+            return idx < 0;
         }
     }
 }

@@ -18,18 +18,38 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
 ## Layered State Machine (HFSM)
 - New hierarchical FSM organizes gameplay states with KOF rules while supporting layered blending:
   - Root -> Locomotion(super) -> `Grounded` / `Air`
-  - `Grounded` children: `Idle`, `Walk`, `Crouch`, `Block`, `Attack-Light`, `Attack-Heavy`, `Hitstun`, `Downed`, `Throw`, `Dodge`
+  - `Grounded` children: `Idle`, `Walk`, `Crouch`, `Block` (stand/crouch), `Attack-Light`, `Attack-Heavy`, `Hitstun`, `Downed`, `Throw`, `Dodge`
   - `Air` children: `Jump`, `AirAttack-Light`, `AirAttack-Heavy`, `Hitstun`
-- The controller now ticks the HFSM; legacy FSM remains for compatibility but is bypassed by default.
+- The controller now ticks the HFSM; legacy FSM was removed from runtime.
+
+## UI Mode & Debug Guide
+- A `RuntimeConfig` singleton controls UI visibility.
+  - Mode: `Debug` or `Release` (`RuntimeConfig.uiMode`)
+  - Toggles: `showStateTexts`, `showNumericBars` (HP/Meter numbers), `showDebugHUD`
+- All HUD elements created by `HUDFactory` subscribe to config changes (observer pattern) and apply safe-area clamping.
+- Typical usage:
+  ```csharp
+  Systems.RuntimeConfig.Instance.SetUIMode(Systems.UIMode.Debug);
+  Systems.RuntimeConfig.Instance.SetShowStateTexts(true);
+  Systems.RuntimeConfig.Instance.SetShowNumericBars(true);
+  Systems.RuntimeConfig.Instance.SetShowDebugHUD(true);
+  ```
+  In Release mode the debug texts are hidden automatically.
+
+## Input Tuning (Designers)
+- `Data/InputTuningConfig` ScriptableObject exposes:
+  - `commandBufferWindow`: token lifetime in `CommandQueue`
+  - `specialHistoryLifetime`, `defaultSpecialWindowSeconds`: special input detection timing
+- Assign this asset to `BattleAutoSetup.inputTuning` (or directly to `CommandQueue`/`SpecialInputResolver`) to author timing without code changes.
 
 ## Repo Structure
 - `Assets/` (created after opening Unity)
   - `Scripts/`
-    - `Combat/`: Hitbox, Hurtbox, DamageInfo, Health
-    - `Fighter/`: FighterController, States, Input (IInputSource, PlayerInputSource, AIInputSource, InputDriver)
-    - `Systems/`: RoundManager, GameManager, FrameClock, CameraShaker
+    - `Combat/`: Hitbox, Hurtbox, DamageInfo, CommandQueue, SpecialInputResolver
+    - `Fighter/`: FighterController, HFSM, Input (Player/AI sources, PlayerCommandFeeder/AICommandFeeder)
+    - `Systems/`: RoundManager, GameManager, FrameClock, CameraShaker, RuntimeConfig
     - `UI/`: HUDFactory, SafeAreaClamp, Health/Meter binders, Debug HUD, MainMenuBuilder
-    - `Data/`: ScriptableObjects for fighter stats and moves
+    - `Data/`: ScriptableObjects for fighter stats, moves, input tuning
   - `Art/`, `Audio/`, `Prefabs/`, `Scenes/`
 - `ProjectSettings/`, `Packages/` (Unity-generated)
 
@@ -65,7 +85,7 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
 - Crouch: S or DownArrow
 - Light: J
 - Heavy: K
-- Block (hold): Left Shift
+- Block (hold): Left Shift (crouch+block for crouch-guard)
 - Dodge: L
 
 ## White-box Hitbox/Hurtbox

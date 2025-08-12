@@ -13,6 +13,7 @@ namespace Dev {
         public bool createGround = true;
         public Vector2 arenaHalfExtents = new Vector2(256f, 3.5f);
         public bool demoScripted = false;
+        public InputTuningConfig inputTuning;
 
         private void Start() {
             if (createManagers) EnsureManagers();
@@ -21,7 +22,6 @@ namespace Dev {
             var p2 = CreateAIFighter(new Vector3(1.6f, -1f, 0f));
             LinkOpponents(p1, p2);
             if (createUI) CreateUI(p1, p2);
-            // attach simple Dev panel for MoveData tuning on P1
             if (!p1.GetComponent<Dev.MoveDataDevPanel>()) p1.gameObject.AddComponent<Dev.MoveDataDevPanel>();
             Debug.Log("BattleAutoSetup ready: A/D move, Space jump, S crouch, J/K attack, Shift block, L dodge");
         }
@@ -46,6 +46,7 @@ namespace Dev {
             }
             if (!FindObjectOfType<HitEffectManager>()) new GameObject("HitEffectManager").AddComponent<HitEffectManager>();
             if (!FindObjectOfType<ComboCounter>()) new GameObject("ComboCounter").AddComponent<ComboCounter>();
+            if (!FindObjectOfType<RuntimeConfig>()) new GameObject("RuntimeConfig").AddComponent<RuntimeConfig>();
         }
 
         void CreateGround() {
@@ -58,7 +59,6 @@ namespace Dev {
             var sr = vis.AddComponent<SpriteRenderer>(); sr.sprite = CreateSolidSprite(new Color(0.15f, 0.6f, 0.15f, 1f));
             vis.transform.localScale = new Vector3(col.size.x, col.size.y, 1f);
 
-            // side walls
             float wallX = 256f + 2f;
             float wallHeight = 7f;
             float wallWidth = 0.5f;
@@ -74,8 +74,9 @@ namespace Dev {
             if (!demoScripted) {
                 var src = fc.gameObject.AddComponent<Fighter.InputSystem.PlayerInputSource>();
                 fc.gameObject.AddComponent<Fighter.InputSystem.InputDriver>();
-                // ensure no other input sources remain enabled
-                var scripted = fc.GetComponent<Fighter.InputSystem.ScriptedInputSource>(); if (scripted) scripted.enabled = false;
+                var feeder = fc.gameObject.AddComponent<Fighter.InputSystem.PlayerCommandFeeder>();
+                var cq = fc.GetComponent<Combat.CommandQueue>(); cq.tuning = inputTuning;
+                var sp = fc.GetComponent<Fighter.SpecialInputResolver>(); if (sp) sp.tuning = inputTuning;
                 var ai = fc.GetComponent<Fighter.InputSystem.AIInputSource>(); if (ai) ai.enabled = false;
             } else {
                 var src = fc.gameObject.AddComponent<Fighter.InputSystem.ScriptedInputSource>();
@@ -96,6 +97,9 @@ namespace Dev {
             normal.blockProbability = 0.2f; normal.attackCooldownRange = new Vector2(0.6f, 1.2f); normal.approachDistance = 2.2f; normal.retreatDistance = 1.0f;
             aiSrc.normal = normal; aiSrc.easy = normal; aiSrc.hard = normal; aiSrc.fighter = fc;
             fc.gameObject.AddComponent<Fighter.InputSystem.InputDriver>();
+            var feeder = fc.gameObject.AddComponent<Fighter.InputSystem.AICommandFeeder>();
+            var cq = fc.GetComponent<Combat.CommandQueue>(); cq.tuning = inputTuning;
+            var sp = fc.GetComponent<Fighter.SpecialInputResolver>(); if (sp) sp.tuning = inputTuning;
             if (!fc.gameObject.GetComponent<Combat.CommandQueue>()) fc.gameObject.AddComponent<Combat.CommandQueue>();
             fc.gameObject.AddComponent<Fighter.InputSystem.MovementDashResolver>();
             AttachSpecials(fc);
@@ -238,6 +242,7 @@ namespace Dev {
             };
             var resolver = fc.gameObject.AddComponent<Fighter.SpecialInputResolver>();
             resolver.fighter = fc; resolver.specialSet = set;
+            resolver.tuning = inputTuning;
         }
     }
 
