@@ -2,12 +2,7 @@ using UnityEngine;
 using Combat;
 
 namespace Fighter {
-    /// <summary>
-    /// Legacy adapter to translate simple command tokens to FighterController combo cancels.
-    /// Prefer using InputSystem.InputDriver + IInputSource and let SpecialInputResolver/ComboHandler consume queues.
-    /// Enhancement: If not currently attacking, a Light/Heavy token will start a new attack immediately.
-    /// Also supports Throw when near opponent (J+K default).
-    /// </summary>
+    [DefaultExecutionOrder(50)]
     public class CommandQueueFeeder : MonoBehaviour {
         public FighterController fighter;
         public CommandQueue commandQueue;
@@ -21,7 +16,6 @@ namespace Fighter {
         void Update() {
             if (!fighter || !commandQueue) return;
 
-            // Prioritize combo channel for cancels
             if (commandQueue.TryPeekCombo(out var comboTok)) {
                 commandQueue.TryDequeueCombo(out _);
                 if (comboTok == CommandToken.Light || comboTok == CommandToken.Heavy) {

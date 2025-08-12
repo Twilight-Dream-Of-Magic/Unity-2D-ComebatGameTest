@@ -6,12 +6,14 @@ namespace Fighter.InputSystem {
     /// Player keyboard input implementation of IInputSource. Produces FighterCommands
     /// and enqueues command tokens for specials/combos.
     /// </summary>
+    [DefaultExecutionOrder(40)]
     public class PlayerInputSource : MonoBehaviour, IInputSource {
         public CommandQueue commandQueue;
         public CommandQueueFeeder feeder;
         public float horizontalScale = 1f;
 
         void Awake() {
+            if (!commandQueue) commandQueue = GetComponent<CommandQueue>();
             if (!commandQueue) commandQueue = gameObject.AddComponent<CommandQueue>();
             commandQueue.bufferWindow = 0.35f; // more forgiving buffer for player
             if (!feeder) feeder = gameObject.AddComponent<CommandQueueFeeder>();
@@ -30,16 +32,16 @@ namespace Fighter.InputSystem {
             bool kHeld = Input.GetKey(KeyCode.K);
             bool throwThisFrame = (jHeld && kDown) || (kHeld && jDown);
             if (throwThisFrame) {
-                commandQueue.Enqueue(CommandToken.Throw);
+                commandQueue.EnqueueNormal(CommandToken.Throw);
             } else {
-                if (jDown) commandQueue.Enqueue(CommandToken.Light);
-                if (kDown) commandQueue.Enqueue(CommandToken.Heavy);
+                if (jDown) commandQueue.EnqueueNormal(CommandToken.Light);
+                if (kDown) commandQueue.EnqueueNormal(CommandToken.Heavy);
             }
 
-            if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow)) commandQueue.Enqueue(CommandToken.Up);
-            if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow)) commandQueue.Enqueue(CommandToken.Down);
-            if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow)) commandQueue.Enqueue(fighter.facingRight ? CommandToken.Back : CommandToken.Forward);
-            if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow)) commandQueue.Enqueue(fighter.facingRight ? CommandToken.Forward : CommandToken.Back);
+            if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow)) commandQueue.EnqueueNormal(CommandToken.Up);
+            if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow)) commandQueue.EnqueueNormal(CommandToken.Down);
+            if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow)) commandQueue.EnqueueNormal(fighter.facingRight ? CommandToken.Back : CommandToken.Forward);
+            if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow)) commandQueue.EnqueueNormal(fighter.facingRight ? CommandToken.Forward : CommandToken.Back);
 
             // per-frame command snapshot
             commands = new FighterCommands {
