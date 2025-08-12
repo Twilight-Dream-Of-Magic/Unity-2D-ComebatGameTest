@@ -35,7 +35,8 @@ namespace Fighter.HFSM {
         public IdleState Idle { get; private set; }
         public WalkState Walk { get; private set; }
         public CrouchState Crouch { get; private set; }
-        public BlockState Block { get; private set; }
+        public BlockStandState BlockStand { get; private set; }
+        public BlockCrouchState BlockCrouch { get; private set; }
         public AttackState AttackLight { get; private set; }
         public AttackState AttackHeavy { get; private set; }
         public HitstunState Hitstun { get; private set; }
@@ -46,7 +47,8 @@ namespace Fighter.HFSM {
             Idle = new IdleState(f, this);
             Walk = new WalkState(f, this);
             Crouch = new CrouchState(f, this);
-            Block = new BlockState(f, this);
+            BlockStand = new BlockStandState(f, this);
+            BlockCrouch = new BlockCrouchState(f, this);
             AttackLight = new AttackState(f, this, "Light");
             AttackHeavy = new AttackState(f, this, "Heavy");
             Hitstun = new HitstunState(f, this);
@@ -77,7 +79,7 @@ namespace Fighter.HFSM {
             var g = Parent as GroundedState;
             var loco = Parent.Parent as LocomotionState;
             var c = Fighter.PendingCommands;
-            if (c.block) { g.Machine.ChangeState(g.Block); return; }
+            if (c.block) { g.Machine.ChangeState(c.crouch ? (HState)g.BlockCrouch : (HState)g.BlockStand); return; }
             if (c.dodge) { g.Machine.ChangeState(g.Dodge); return; }
             if (c.crouch) { g.Machine.ChangeState(g.Crouch); return; }
             if (c.jump && Fighter.CanJump()) { Fighter.DoJump(); loco.Machine.ChangeState(loco.Air.Jump); return; }
@@ -96,7 +98,7 @@ namespace Fighter.HFSM {
             var loco = Parent.Parent as LocomotionState;
             var c = Fighter.PendingCommands;
             if (Mathf.Abs(c.moveX) < 0.01f) { g.Machine.ChangeState(g.Idle); return; }
-            if (c.block) { g.Machine.ChangeState(g.Block); return; }
+            if (c.block) { g.Machine.ChangeState(c.crouch ? (HState)g.BlockCrouch : (HState)g.BlockStand); return; }
             if (c.crouch) { g.Machine.ChangeState(g.Crouch); return; }
             if (c.jump && Fighter.CanJump()) { Fighter.DoJump(); loco.Machine.ChangeState(loco.Air.Jump); return; }
             if (c.light) { g.Machine.ChangeState(g.AttackLight); return; }
@@ -114,19 +116,35 @@ namespace Fighter.HFSM {
             var g = Parent as GroundedState;
             var c = Fighter.PendingCommands;
             if (!c.crouch) { g.Machine.ChangeState(g.Idle); return; }
+            if (c.block) { g.Machine.ChangeState(g.BlockCrouch); return; }
             if (c.light) { g.Machine.ChangeState(g.AttackLight); return; }
             if (c.heavy) { g.Machine.ChangeState(g.AttackHeavy); return; }
         }
     }
 
-    public class BlockState : HState {
-        public BlockState(FighterController f, HState p) : base(f, p) { }
+    public class BlockStandState : HState {
+        public BlockStandState(FighterController f, HState p) : base(f, p) { }
         public override string Name => "Block";
-        public override void OnEnter() { Fighter.SetAnimatorBool("Block", true); }
+        public override void OnEnter() { Fighter.SetAnimatorBool("Block", true); Fighter.IsCrouching = false; Fighter.SetAnimatorBool("Crouch", false); }
         public override void OnExit() { Fighter.SetAnimatorBool("Block", false); }
         public override void OnTick() {
             var g = Parent as GroundedState;
-            if (!Fighter.PendingCommands.block) g.Machine.ChangeState(g.Idle);
+            var c = Fighter.PendingCommands;
+            if (!c.block) { g.Machine.ChangeState(c.crouch ? (HState)g.Crouch : (HState)g.Idle); return; }
+            if (c.crouch) { g.Machine.ChangeState(g.BlockCrouch); return; }
+        }
+    }
+
+    public class BlockCrouchState : HState {
+        public BlockCrouchState(FighterController f, HState p) : base(f, p) { }
+        public override string Name => "Block(Crouch)";
+        public override void OnEnter() { Fighter.IsCrouching = true; Fighter.SetAnimatorBool("Crouch", true); Fighter.SetAnimatorBool("Block", true); }
+        public override void OnExit() { Fighter.SetAnimatorBool("Block", false); }
+        public override void OnTick() {
+            var g = Parent as GroundedState;
+            var c = Fighter.PendingCommands;
+            if (!c.block) { g.Machine.ChangeState(c.crouch ? (HState)g.Crouch : (HState)g.Idle); return; }
+            if (!c.crouch) { g.Machine.ChangeState(g.BlockStand); return; }
         }
     }
 

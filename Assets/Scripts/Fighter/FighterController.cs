@@ -169,8 +169,8 @@ namespace Fighter {
             HMachine.ChangeState(target);
         }
         public void EnterThrowHFSM() { HMachine.ChangeState(HRoot.Locomotion.Grounded.Throw); }
-        public void EnterBlockHFSM() { HMachine.ChangeState(HRoot.Locomotion.Grounded.Block); }
-        public void EnterCrouchHFSM() { HMachine.ChangeState(HRoot.Locomotion.Grounded.Crouch); }
+        public void EnterBlockHFSM() { /* HFSM reads PendingCommands.block each frame to switch BlockStand/BlockCrouch */ }
+        public void EnterCrouchHFSM() { /* HFSM reads PendingCommands.crouch and will enter Crouch/BlockCrouch accordingly */ }
         public void EnterDodgeHFSM() { HMachine.ChangeState(HRoot.Locomotion.Grounded.Dodge); }
         public void EnterHitstunHFSM(float seconds) {
             var loc = HRoot.Locomotion;
