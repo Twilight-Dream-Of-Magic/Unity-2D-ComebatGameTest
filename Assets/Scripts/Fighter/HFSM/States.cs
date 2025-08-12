@@ -148,14 +148,27 @@ namespace Fighter.HFSM {
         public override void OnTick() {
             var g = Parent as GroundedState;
             t += Time.deltaTime;
+            var md = Fighter.CurrentMove;
+            bool tryCancel = Fighter.TryConsumeComboCancel(out string to);
+            bool contact = Fighter.HasRecentHitConfirm();
+            bool allowCancel = false;
+            if (md != null) {
+                if (!contact && md.canCancelOnWhiff && t >= md.onWhiffCancelWindow.x && t <= md.onWhiffCancelWindow.y) allowCancel = true;
+                if (contact) {
+                    if (md.canCancelOnHit && t >= md.onHitCancelWindow.x && t <= md.onHitCancelWindow.y) allowCancel = true;
+                    if (md.canCancelOnBlock && t >= md.onBlockCancelWindow.x && t <= md.onBlockCancelWindow.y) allowCancel = true;
+                }
+            }
             switch (phase) {
                 case Phase.Startup:
                     if (t >= startup) { phase = Phase.Active; t = 0; Fighter.SetAttackActive(true); }
                     break;
                 case Phase.Active:
+                    if (tryCancel && allowCancel && !string.IsNullOrEmpty(to)) { Fighter.TriggerAttack(to); phase = Phase.Startup; t = 0; break; }
                     if (t >= active) { phase = Phase.Recovery; t = 0; Fighter.SetAttackActive(false); }
                     break;
                 case Phase.Recovery:
+                    if (tryCancel && allowCancel && !string.IsNullOrEmpty(to)) { Fighter.TriggerAttack(to); phase = Phase.Startup; t = 0; break; }
                     if (t >= recovery) { g.Machine.ChangeState(g.Idle); Fighter.ClearCurrentMove(); }
                     break;
             }
