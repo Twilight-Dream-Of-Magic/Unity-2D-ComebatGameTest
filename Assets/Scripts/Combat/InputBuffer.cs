@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Combat {
+namespace FightingGame.Combat {
     public class InputBuffer : MonoBehaviour {
         [System.Serializable]
         public struct TimedToken { public CommandToken token; public float time; }

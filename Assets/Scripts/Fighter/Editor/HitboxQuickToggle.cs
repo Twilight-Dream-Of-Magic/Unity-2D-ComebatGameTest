@@ -3,12 +3,12 @@ using UnityEngine;
 
 namespace Fighter.EditorTools {
     public class HitboxQuickToggle : MonoBehaviour {
-        public FighterController fighter;
+        public FightingGame.Combat.Actors.FighterActor fighter;
         public bool activateAll;
         public KeyCode toggleKey = KeyCode.H;
 
         private void Reset() {
-            if (fighter == null) fighter = GetComponent<FighterController>();
+            if (fighter == null) fighter = GetComponent<FightingGame.Combat.Actors.FighterActor>();
         }
 
         private void Update() {
