@@ -1,64 +1,69 @@
 using UnityEngine;
 
-namespace Combat {
-    [RequireComponent(typeof(Collider2D))]
-    public class Hitbox : MonoBehaviour {
-        public Fighter.FighterController owner;
-        public DamageInfo damageInfo;
-        public bool active;
+namespace FightingGame.Combat {
+	/// <summary>
+	/// An attack collider owned by a Fighter. When touching a Hurtbox
+	/// of a different owner, it builds the effective DamageInfo (can be overridden by current action data)
+	/// and forwards it to the target's DamageReceiver.
+	/// </summary>
+	public class Hitbox : MonoBehaviour {
+		public Actors.FighterActor owner;
+		public bool active;
+		public DamageInfo baseInfo;
 
-        private void Reset() {
-            var col = GetComponent<Collider2D>();
-            if (col != null) col.isTrigger = true;
-        }
+		void OnTriggerStay2D(Collider2D other)
+		{
+			TryApply(other);
+		}
 
-        private void OnTriggerEnter2D(Collider2D other) {
-            if (!active) return;
-            var hb = other.GetComponent<Hurtbox>();
-            if (hb == null) return;
-            if (hb.owner == null || hb.owner == owner) return;
-            if (!hb.enabledThisFrame) return;
-            if (!owner.CanHitTarget(hb.owner)) return;
+		public void TryApply(Collider2D other)
+		{
+			var hurt = other.GetComponent<Hurtbox>();
+			if (hurt == null)
+			{
+				return;
+			}
+			if (!active)
+			{
+				return;
+			}
+			if (hurt.owner == owner)
+			{
+				return;
+			}
+#if UNITY_EDITOR
+			Debug.Log($"[Hitbox] {owner?.name} hit {hurt.owner?.name} dmg={baseInfo.damage} level={baseInfo.level} active={active}");
+#endif
+			var info = BuildEffectiveDamageInfo();
+			hurt.owner.TakeHit(info, owner);
+		}
 
-            DamageInfo info = BuildEffectiveDamageInfo();
-            hb.owner.TakeHit(info, owner);
-            // spawn colored hit effect at contact point
-            var pos = other.bounds.ClosestPoint(transform.position);
-            bool isPlayerHit = hb.owner.team == Fighter.FighterTeam.Player;
-            Systems.HitEffectManager.Instance?.SpawnHit(pos, isPlayerHit);
-        }
+		DamageInfo BuildEffectiveDamageInfo()
+		{
+			var info = baseInfo;
+			var action = owner.CurrentMove;
+			if (action != null)
+			{
+				info.damage = action.damage;
+				info.level = action.hitLevel;
+				info.hitstun = action.hitstun;
+				info.blockstun = action.blockstun;
+				info.knockback = action.knockback;
+				info.canBeBlocked = action.canBeBlocked;
+				info.hitstopOnHit = action.hitstopOnHit;
+				info.hitstopOnBlock = action.hitstopOnBlock;
+				info.pushbackOnHit = action.pushbackOnHit;
+				info.pushbackOnBlock = action.pushbackOnBlock;
+				info.knockdownKind = action.knockdownKind;
+				info.meterOnHit = action.meterOnHit;
+				info.meterOnBlock = action.meterOnBlock;
+			}
+			return info;
+		}
 
-        DamageInfo BuildEffectiveDamageInfo() {
-            var info = damageInfo;
-            var md = owner != null ? owner.CurrentMove : null;
-            if (md != null) {
-                info.damage = md.damage;
-                info.hitstun = md.hitstun;
-                info.blockstun = md.blockstun;
-                info.knockback = md.knockback;
-                info.canBeBlocked = md.canBeBlocked;
-                info.level = md.hitLevel;
-                info.type = md.hitType;
-                info.priority = md.priority;
-                info.hitstopOnHit = md.hitstopOnHit;
-                info.hitstopOnBlock = md.hitstopOnBlock;
-                info.pushbackOnHit = md.pushbackOnHit;
-                info.pushbackOnBlock = md.pushbackOnBlock;
-            }
-            return info;
-        }
-
-        public void SetActive(bool value) { active = value; }
-
-        private void OnDrawGizmos() {
-            var col = GetComponent<Collider2D>();
-            if (col == null) return;
-            var b = col.bounds;
-            Color c = active ? new Color(1f, 1f, 1f, 0.25f) : new Color(1f, 1f, 1f, 0.08f);
-            Gizmos.color = c;
-            Gizmos.DrawCube(b.center, b.size);
-            Gizmos.color = Color.white;
-            Gizmos.DrawWireCube(b.center, b.size);
-        }
-    }
+		public void SetActive(bool value)
+		{
+			active = value;
+		}
+	}
 }

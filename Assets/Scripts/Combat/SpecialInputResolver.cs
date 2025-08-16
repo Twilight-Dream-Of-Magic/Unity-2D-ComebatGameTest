@@ -1,59 +1,44 @@
 using System.Collections.Generic;
 using UnityEngine;
-using Combat;
+using FightingGame.Combat;
 using Data;
 
 namespace Fighter {
-    public class SpecialInputResolver : MonoBehaviour {
-        public FighterController fighter;
-        public CommandQueue commandQueue;
-        public SpecialMoveSet specialSet;
-        public float historyLifetime = 0.8f;
+	/// <summary>
+	/// Thin coordinator that wires CommandQueue tokens to SpecialMatcher and SpecialExecutor.
+	/// </summary>
+	public class SpecialInputResolver : MonoBehaviour {
+		public FightingGame.Combat.Actors.FighterActor fighter;
+		public CommandQueue commandQueue;
+		public SpecialMoveSet specialSet;
+		public InputTuningConfig tuning;
+		SpecialMatcher matcher;
+		SpecialExecutor executor;
 
-        readonly List<(CommandToken tok, float t)> history = new();
+		void Awake() {
+			if (!fighter) fighter = GetComponent<FightingGame.Combat.Actors.FighterActor>();
+			if (!commandQueue) commandQueue = GetComponent<CommandQueue>();
+			matcher = GetComponent<SpecialMatcher>(); if (!matcher) matcher = gameObject.AddComponent<SpecialMatcher>(); matcher.specialSet = specialSet; matcher.Configure(tuning);
+			executor = GetComponent<SpecialExecutor>(); if (!executor) executor = gameObject.AddComponent<SpecialExecutor>(); executor.fighter = fighter; executor.matcher = matcher;
+			if (commandQueue) {
+				commandQueue.RegisterHandler(CommandChannel.Normal, CommandToken.Down,  time => executor.HandleToken(CommandToken.Down, time), priority: 100);
+				commandQueue.RegisterHandler(CommandChannel.Normal, CommandToken.Up,    time => executor.HandleToken(CommandToken.Up, time), priority: 100);
+				commandQueue.RegisterHandler(CommandChannel.Normal, CommandToken.Forward, time => executor.HandleToken(CommandToken.Forward, time), priority: 100);
+				commandQueue.RegisterHandler(CommandChannel.Normal, CommandToken.Back,  time => executor.HandleToken(CommandToken.Back, time), priority: 100);
+				commandQueue.RegisterHandler(CommandChannel.Combo, CommandToken.Light,  time => executor.HandleToken(CommandToken.Light, time), priority: 100);
+				commandQueue.RegisterHandler(CommandChannel.Combo, CommandToken.Heavy,  time => executor.HandleToken(CommandToken.Heavy, time), priority: 100);
+			}
+		}
 
-        void Awake() {
-            if (!fighter) fighter = GetComponent<FighterController>();
-            if (!commandQueue) commandQueue = GetComponent<CommandQueue>();
-            if (commandQueue) commandQueue.OnEnqueued += OnToken;
-        }
-
-        void OnDestroy() {
-            if (commandQueue) commandQueue.OnEnqueued -= OnToken;
-        }
-
-        void OnToken(CommandToken tok) {
-            history.Add((tok, Time.time));
-            Cleanup();
-            TryMatch();
-        }
-
-        void Cleanup() {
-            float now = Time.time;
-            for (int i = history.Count - 1; i >= 0; i--) if (now - history[i].t > historyLifetime) history.RemoveAt(i);
-        }
-
-        void TryMatch() {
-            if (!fighter || specialSet == null || specialSet.specials == null) return;
-            foreach (var sp in specialSet.specials) {
-                if (MatchTail(sp.sequence, sp.maxWindowSeconds)) {
-                    fighter.RequestComboCancel(sp.triggerName);
-                    history.Clear();
-                    break;
-                }
-            }
-        }
-
-        bool MatchTail(CommandToken[] seq, float window) {
-            if (seq == null || seq.Length == 0) return false;
-            float now = Time.time;
-            int idx = seq.Length - 1;
-            for (int i = history.Count - 1; i >= 0 && idx >= 0; i--) {
-                var h = history[i];
-                if (now - h.t > window) return false;
-                if (h.tok == seq[idx]) idx--;
-            }
-            return idx < 0; // all matched in order within window
-        }
-    }
+		void OnDestroy() {
+			if (commandQueue) {
+				commandQueue.UnregisterHandler(CommandChannel.Normal, CommandToken.Down,  time => executor.HandleToken(CommandToken.Down, time));
+				commandQueue.UnregisterHandler(CommandChannel.Normal, CommandToken.Up,    time => executor.HandleToken(CommandToken.Up, time));
+				commandQueue.UnregisterHandler(CommandChannel.Normal, CommandToken.Forward, time => executor.HandleToken(CommandToken.Forward, time));
+				commandQueue.UnregisterHandler(CommandChannel.Normal, CommandToken.Back,  time => executor.HandleToken(CommandToken.Back, time));
+				commandQueue.UnregisterHandler(CommandChannel.Combo, CommandToken.Light,  time => executor.HandleToken(CommandToken.Light, time));
+				commandQueue.UnregisterHandler(CommandChannel.Combo, CommandToken.Heavy,  time => executor.HandleToken(CommandToken.Heavy, time));
+			}
+		}
+	}
 }

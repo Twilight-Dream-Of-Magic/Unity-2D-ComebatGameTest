@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Combat {
+namespace FightingGame.Combat {
     public static class HitResolver {
         public struct Result {
             public int finalDamage;
