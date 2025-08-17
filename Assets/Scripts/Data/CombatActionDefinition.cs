@@ -9,7 +9,7 @@ namespace Data {
     [CreateAssetMenu(menuName = "Fighter/Action Definition")]
     public class CombatActionDefinition : ScriptableObject {
         [Header("Identity")]
-        public string moveId;
+        public string nameId;
         public string triggerName;
 
         [Header("Frame Data (seconds)")]

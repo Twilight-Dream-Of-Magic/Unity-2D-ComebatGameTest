@@ -15,9 +15,9 @@ namespace Data {
         [Header("Special Input")] 
         [Tooltip("How long to keep token history for special detection.")]
         /// <summary>Special detection history lifetime. 搓招识别历史寿命。</summary>
-        public float specialHistoryLifetime = 0.8f;
-        [Tooltip("Default special input window when a SpecialMoveSet entry has 0.")]
+        public float specialHistoryLifetime = 1.2f;
+        [Tooltip("Default special window when entry is 0. 默认搓招时窗（秒）.")]
         /// <summary>Default special window when entry is 0. 默认搓招时窗。</summary>
-        public float defaultSpecialWindowSeconds = 0.6f;
+        public float defaultSpecialWindowSeconds = 1.0f;
     }
 }

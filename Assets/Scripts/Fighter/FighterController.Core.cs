@@ -120,7 +120,7 @@ namespace FightingGame.Combat.Actors
 			animator = GetComponent<Animator>();
 			if (animator == null) animator = gameObject.AddComponent<Animator>();
 			if (bodyCollider == null) bodyCollider = GetComponent<CapsuleCollider2D>();
-			currentHealth = stats != null ? stats.maxHealth : 20000;
+			currentHealth = stats != null ? stats.maxHealth : 5000;
 			rigidbody2D.gravityScale = stats != null ? stats.gravityScale : 4f;
 			spriteRendererVisual = GetComponentInChildren<SpriteRenderer>();
 			if (spriteRendererVisual != null)

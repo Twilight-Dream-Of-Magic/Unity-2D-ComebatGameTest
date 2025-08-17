@@ -63,6 +63,7 @@
     <Compile Include="Assets\Scripts\Data\CombatActionSet.cs" />
     <Compile Include="Assets\Scripts\Systems\ComboCounter.cs" />
     <Compile Include="Assets\Scripts\UI\MainMenuController.cs" />
+    <Compile Include="Assets\Scripts\Combat\SpecialInputResolver.cs" />
     <Compile Include="Assets\Scripts\Fighter\FighterStats.cs" />
     <Compile Include="Assets\Scripts\UI\HUD\MeterBarView.cs" />
     <Compile Include="Assets\Scripts\Systems\RoundManager.cs" />
@@ -106,9 +107,9 @@
     <Compile Include="Assets\Scripts\Fighter\Input\PlayerBrain.cs" />
     <Compile Include="Assets\Scripts\Dev\ManagersBootstrapper.cs" />
     <Compile Include="Assets\Scripts\UI\MainMenuBuilder.cs" />
+    <Compile Include="Assets\Scripts\Data\CommandSequenceSet.cs" />
     <Compile Include="Assets\Scripts\UI\HUD\TimerPresenter.cs" />
     <Compile Include="Assets\Scripts\Systems\RuntimeConfig.cs" />
-    <Compile Include="Assets\Scripts\Data\SpecialMoveSet.cs" />
     <Compile Include="Assets\Scripts\Fighter\HFSM\States.cs" />
     <Compile Include="Assets\Scripts\UI\CanvasRoot.cs" />
     <Compile Include="Assets\Scripts\Fighter\Core\DamageReceiver.cs" />

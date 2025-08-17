@@ -17,16 +17,18 @@ namespace Systems {
         public bool showNumericBars = true; // HP/Meter numbers
         public bool showDebugHUD = true;
         [Header("Gameplay Toggles")]
-        public bool specialsEnabled = false; // allow disabling specials to validate core loop
+        public bool specialsEnabled = true; // allow disabling specials to validate core loop
         [Header("Player Safeguards / Perks")]
         public bool playerLowHPGuardEnabled = true;
-        public int playerLowHPThreshold = 3000; // 15% of 20000 as default
+        public int playerLowHPThreshold = 750; // 15% of 5000 as default
         public float playerHealCooldown = 3.0f; // seconds between heals
-        public KeyCode playerHealKey = KeyCode.H; // default heal key
         public KeyCode playerDodgeKey = KeyCode.LeftShift; // default dodge key (more ergonomic)
         public KeyCode playerBlockKey = KeyCode.L; // default block key
-        public KeyCode playerSuperKey = KeyCode.I; // optional super trigger
-        public bool superInputEnabled = false; // gate super input; default OFF
+
+		public KeyCode playerHealKey = KeyCode.H; // optional heal key
+		public KeyCode playerSuperKey = KeyCode.I; // optional super trigger
+		public bool healInputEnabled = false; // gate super input; default OFF
+		public bool superInputEnabled = false; // gate super input; default OFF
 
         [Header("Block Timing")]
         public float blockMaxHoldSeconds = 0.8f; // 玩家持續按住格擋可生效的最長時間

@@ -39,8 +39,8 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
 ## Input Tuning (Designers)
 - `Data/InputTuningConfig` ScriptableObject exposes:
   - `commandBufferWindow`: token lifetime in `CommandQueue`
-  - `specialHistoryLifetime`, `defaultSpecialWindowSeconds`: special input detection timing
-- Assign this asset to `BattleAutoSetup.inputTuning` (or directly to `CommandQueue`/`SpecialInputResolver`) to author timing without code changes.
+  - `specialHistoryLifetime`, `defaultSpecialWindowSeconds`: special input detection timing (defaults: 1.2s, 1.0s)
+- Assign this asset to `BattleAutoSetup.inputTuning` (or directly to `CommandQueue`/`SpecialInputResolver`).
 
 ## Repo Structure
 - `Assets/` (created after opening Unity)
@@ -49,7 +49,7 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
     - `Fighter/`: FighterController, HFSM, Input (`PlayerBrain` / `AIBrain`)
     - `Systems/`: RoundManager, GameManager, FrameClock, CameraShaker, RuntimeConfig
     - `UI/`: HUDFactory, SafeAreaClamp, Health/Meter binders, Debug HUD, MainMenuBuilder
-    - `Data/`: ScriptableObjects for fighter stats, moves, input tuning
+    - `Data/`: ScriptableObjects for fighter stats, moves, input tuning, command sequences
   - `Art/`, `Audio/`, `Prefabs/`, `Scenes/`
 - `ProjectSettings/`, `Packages/` (Unity-generated)
 
@@ -65,7 +65,7 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
        - Player: add `Input/PlayerBrain`
        - AI: add `Input/AIBrain`
    - Create `FighterStats` ScriptableObject and assign
-   - Specials: `SpecialMoveSet` defines input sequences using direction/keys (e.g. Down, Forward, Heavy -> Super; Down, Down, Light -> Heal). `CommandQueue` default cleanup 0.25s; sequence matching uses per-entry `maxWindowSeconds` (default 0.6s).
+   - Specials via `CommandSequenceSet`: define sequences using direction/keys (e.g. Down, Forward, Heavy -> Super). Sequences with length < 3 are ignored (ensures single-key still triggers basic attacks).
 5) Animator: set Idle/Walk/Jump/Crouch/Block/Light/Heavy/Hit/KO. Add Animation Events to attack clips to toggle hitboxes.
 6) In the battle scene, add `RoundManager` and call `UI/HUDFactory.Create(...)` (or use the `BattleAutoSetup` to auto-build the scene). Link returned references to `RoundManager` (`p1`, `p2`, `p1Hp`, `p2Hp`, `timerText`).
 7) Play. Use controls below.
@@ -80,14 +80,14 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
 - Empty scene -> add `Dev/DemoAutoRunner` component and press Play. It auto-generates a full battle and runs a scripted showcase (walk/jump/crouch/L-L-H/block/dodge/Super). Alternatively, set `Dev/BattleAutoSetup.demoScripted = true` (uses `InputBrain` Scripted mode under the hood).
 
 ## Controls (default)
-- Move: A/D
+- Move: A/D (relative forward/back used for sequences)
 - Jump: Space/W
 - Crouch: S
 - Light: J
 - Heavy: K
 - Block (hold): L (crouch+block for crouch-guard)
 - Dodge: Left Shift
-- Super: I (DISABLED by default; toggle via RuntimeConfig.superInputEnabled)
+- Super: via defined sequences (length >= 3 to be recognized)
 
 ## White-box Hitbox/Hurtbox
 - `Hurtbox` = trigger collider on the defender, carries reference to its owner.
@@ -96,10 +96,31 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
 
 ## Build & Record
 - Build PC/Mac/Linux Standalone for submission
-- Record a 3–5 min demo (OBS): show movement, attacks, block/dodge, combo, AI, round end.
+- Record a 3–5 min demo (OBS): show movement, attacks, block/dodge, sequence special, AI, round end.
 
 ## Git & Branching
 - `main`: stable
 
 ## License
 MIT
+
+---
+
+## Coding Standards（Unity/C#）
+
+- 命名
+  - 类型/类/结构/接口/枚举：PascalCase
+  - 方法/属性/事件：PascalCase；布尔以 Is/Has/Can/Should 前缀
+  - 局部变量/参数：camelCase；私有字段：_camelCase
+  - 常量优先 static readonly；枚举成员 PascalCase
+- 注释
+  - 重要 public/internal API 使用 XML 文档注释（中英皆可），说明用途、参数/返回、前置/后置条件
+  - Inspector 字段配合 [Header]/[Tooltip]/[Range] 等
+- 代码风格
+  - 缩进 4 空格；Allman 花括号；一行一条语句；避免魔法数字（用 ScriptableObject 配置）
+  - var 仅在类型显而易见时使用；每个 .cs 文件一个公开类型，文件名与类型同名
+- Unity 约定
+  - 组件获取在 Awake/Start 缓存；避免在 Update 里频繁 GetComponent/Find
+  - 物理逻辑在 FixedUpdate；渲染/相机在 LateUpdate；按需乘 Time.deltaTime
+  - 序列化：私有字段 + [SerializeField]，公开只读用属性暴露
+  - 日志：集中封装并可开关；避免散落 Debug.Log

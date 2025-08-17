@@ -3,7 +3,7 @@ using UnityEngine;
 namespace Fighter {
     [CreateAssetMenu(menuName = "Fighter/Stats")]
     public class FighterStats : ScriptableObject {
-        public int maxHealth = 100;
+        public int maxHealth = 5000;
         public float walkSpeed = 6f;
         public float jumpForce = 12f;
         public float gravityScale = 4f;

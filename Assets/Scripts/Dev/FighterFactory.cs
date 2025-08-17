@@ -31,10 +31,15 @@ namespace Dev {
             fighterObject.AddComponent<Fighter.Core.CriticalAttackExecutor>();
             fighterObject.AddComponent<Fighter.Core.DamageReceiver>();
             // FighterResources 由 RoundManager 统一管理/持有，不在此附加。
+            // Ensure resolver exists for runtime injection
+            if (!fighterObject.GetComponent<FightingGame.Combat.SpecialInputResolver>())
+            {
+                fighterObject.AddComponent<FightingGame.Combat.SpecialInputResolver>();
+            }
 
             // Base stats（数值仅用于演示，真实项目应由数据表驱动）
             var stats = ScriptableObject.CreateInstance<Fighter.FighterStats>();
-            stats.maxHealth = 20000;
+            stats.maxHealth = 5000;
             stats.walkSpeed = 6f;
             stats.jumpForce = 12f;
             stats.gravityScale = 4f;
@@ -66,7 +71,7 @@ namespace Dev {
 
             // Minimal move set（便于验证状态机/命中/受击全链路）
             var light = ScriptableObject.CreateInstance<Data.CombatActionDefinition>();
-            light.moveId = "Light";
+            light.nameId = "Light";
             light.triggerName = "Light";
             light.startup = 0.05f;    // 3f 活动前摇
             light.active = 0.04f;     // 2-3f 活动
@@ -90,7 +95,7 @@ namespace Dev {
             light.cancelIntoTriggers = new[] { "Light", "Heavy", "Super" };
 
             var heavy = ScriptableObject.CreateInstance<Data.CombatActionDefinition>();
-            heavy.moveId = "Heavy";
+            heavy.nameId = "Heavy";
             heavy.triggerName = "Heavy";
             heavy.startup = 0.12f;
             heavy.active = 0.05f;
@@ -110,15 +115,15 @@ namespace Dev {
             heavy.knockdownKind = FightingGame.Combat.KnockdownKind.Soft;
             heavy.cancelIntoTriggers = new[] { "Super" };
 
-            var moveSet = ScriptableObject.CreateInstance<Data.CombatActionSet>();
-            moveSet.entries = new Data.CombatActionSet.Entry[]
+            var combatActionSet = ScriptableObject.CreateInstance<Data.CombatActionSet>();
+            combatActionSet.entries = new Data.CombatActionSet.Entry[]
             {
                 new Data.CombatActionSet.Entry { triggerName = "Light", actionDefinition = light },
                 new Data.CombatActionSet.Entry { triggerName = "Heavy", actionDefinition = heavy },
                 new Data.CombatActionSet.Entry { triggerName = "Super", actionDefinition = CreateSuper() },
                 new Data.CombatActionSet.Entry { triggerName = "Heal",  actionDefinition = CreateHeal()  },
             };
-            controller.actionSet = moveSet;
+            controller.actionSet = combatActionSet;
 
             // Hurtboxes（站/蹲/空中启用由 DamageReceiver/状态控制）
             var hurtboxesRoot = new GameObject("Hurtboxes");
@@ -215,12 +220,12 @@ namespace Dev {
         /// </summary>
         static Data.CombatActionDefinition CreateSuper() {
             var actionDefinition = ScriptableObject.CreateInstance<Data.CombatActionDefinition>();
-            actionDefinition.moveId = "Super";
+            actionDefinition.nameId = "Super";
             actionDefinition.triggerName = "Super";
             actionDefinition.startup = 0.14f;
             actionDefinition.active = 0.08f;
             actionDefinition.recovery = 0.28f;
-            actionDefinition.damage = 28;
+            actionDefinition.damage = 500;
             actionDefinition.hitstun = 0.28f;
             actionDefinition.blockstun = 0.16f;
             actionDefinition.knockback = new Vector2(4.2f, 2.8f);
@@ -230,7 +235,7 @@ namespace Dev {
             actionDefinition.hitstopOnBlock = 0.08f;
             actionDefinition.meterOnHit = 120;
             actionDefinition.meterOnBlock = 50;
-            actionDefinition.meterCost = 500;
+            actionDefinition.meterCost = 1000;
             return actionDefinition;
         }
 
@@ -239,7 +244,7 @@ namespace Dev {
         /// </summary>
         static Data.CombatActionDefinition CreateHeal() {
             var actionDefinition = ScriptableObject.CreateInstance<Data.CombatActionDefinition>();
-            actionDefinition.moveId = "Heal";
+            actionDefinition.nameId = "Heal";
             actionDefinition.triggerName = "Heal";
             actionDefinition.startup = 0.08f;
             actionDefinition.active = 0.00f;
@@ -254,8 +259,8 @@ namespace Dev {
             actionDefinition.hitstopOnBlock = 0f;
             actionDefinition.meterOnHit = 0;
             actionDefinition.meterOnBlock = 0;
-            actionDefinition.meterCost = 300;
-            actionDefinition.healAmount = 20;
+            actionDefinition.meterCost = 800;
+            actionDefinition.healAmount = 1200;
             return actionDefinition;
         }
     }

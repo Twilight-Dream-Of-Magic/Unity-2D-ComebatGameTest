@@ -6,7 +6,6 @@ namespace Dev {
     /// and enables scripted demo mode to showcase movement/attacks/AI/round end without manual input.
     /// </summary>
     public class DemoAutoRunner : MonoBehaviour {
-        public bool scriptedDemo = true;
         public bool createManagers = true;
         public bool createHUD = true;
         public bool createGround = true;
@@ -17,7 +16,6 @@ namespace Dev {
             setup.createManagers = createManagers;
             setup.createUI = createHUD;
             setup.createGround = createGround;
-            setup.demoScripted = scriptedDemo;
         }
     }
 }

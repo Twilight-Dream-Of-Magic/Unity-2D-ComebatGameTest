@@ -251,6 +251,7 @@ MonoBehaviour:
   playerIsHuman: 1
   initialUIMode: 1
   inputTuning: {fileID: 0}
+  commandSequenceSet: {fileID: 11400000, guid: 7bc3b6f5ec7c0184cac77041f88a6795, type: 2}
 --- !u!4 &1780674762
 Transform:
   m_ObjectHideFlags: 0
