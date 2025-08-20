@@ -26,7 +26,6 @@ namespace FightingGame.Combat.Actors
 		[Header("Physics")] public LayerMask groundMask = ~0;
 		[Header("Runtime")] public int currentHealth;
 		public int meter;
-		public int maxMeter = 1000;
 		public bool facingRight = true;
 		public bool IsCrouching
 		{
@@ -113,6 +112,7 @@ namespace FightingGame.Combat.Actors
 		Fighter.Core.JumpRule jumpRule;
 		bool dashRequested;
 		bool dashBack;
+		float nextDodgeAllowedAt;
 
 		void Awake()
 		{
@@ -120,7 +120,7 @@ namespace FightingGame.Combat.Actors
 			animator = GetComponent<Animator>();
 			if (animator == null) animator = gameObject.AddComponent<Animator>();
 			if (bodyCollider == null) bodyCollider = GetComponent<CapsuleCollider2D>();
-			currentHealth = stats != null ? stats.maxHealth : 5000;
+			currentHealth = stats != null ? Mathf.Clamp(stats.maxHealth, stats.minHealth, stats.maxHealth) : 5000;
 			rigidbody2D.gravityScale = stats != null ? stats.gravityScale : 4f;
 			spriteRendererVisual = GetComponentInChildren<SpriteRenderer>();
 			if (spriteRendererVisual != null)
@@ -216,6 +216,19 @@ namespace FightingGame.Combat.Actors
 			}
 			_blockLockedUntil = Time.time + seconds;
 			_blockHoldStartAt = 0f;
+		}
+
+		public bool CanDodge()
+		{
+			return Time.time >= nextDodgeAllowedAt;
+		}
+		public void SetDodgeCooldown(float seconds)
+		{
+			if (seconds <= 0f)
+			{
+				return;
+			}
+			nextDodgeAllowedAt = Mathf.Max(nextDodgeAllowedAt, Time.time + seconds);
 		}
 	}
 }

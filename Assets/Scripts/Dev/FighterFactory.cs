@@ -39,7 +39,10 @@ namespace Dev {
 
             // Base stats（数值仅用于演示，真实项目应由数据表驱动）
             var stats = ScriptableObject.CreateInstance<Fighter.FighterStats>();
+            stats.minHealth = 0;
             stats.maxHealth = 5000;
+            stats.minMeter = 0;
+            stats.maxMeter = 2000;
             stats.walkSpeed = 6f;
             stats.jumpForce = 12f;
             stats.gravityScale = 4f;
@@ -48,7 +51,7 @@ namespace Dev {
             stats.dodgeInvuln = 0.2f;
             stats.hitStop = 0.06f;
             controller.stats = stats;
-            controller.maxMeter = 2000;
+            controller.meter = stats.minMeter;
 
             // Animator（若不存在则补齐）
             Animator animator;

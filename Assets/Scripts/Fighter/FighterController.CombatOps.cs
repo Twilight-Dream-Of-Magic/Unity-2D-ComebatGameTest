@@ -264,9 +264,9 @@ namespace FightingGame.Combat.Actors
 			var attackExecutor = GetComponent<Fighter.Core.CriticalAttackExecutor>();
 			if (attackExecutor)
 			{
-				#if UNITY_EDITOR
+#if UNITY_EDITOR
 				Debug.Log($"[FighterActor] SetAttackActive({on}) by {name} move={CurrentMove?.triggerName}");
-				#endif
+#endif
 				attackExecutor.SetAttackActive(on);
 				return;
 			}
@@ -363,9 +363,9 @@ namespace FightingGame.Combat.Actors
 			var recv = GetComponent<Fighter.Core.DamageReceiver>();
 			if (recv)
 			{
-				#if UNITY_EDITOR
+#if UNITY_EDITOR
 				Debug.Log($"[FighterActor] TakeHit by {attacker?.name} on {name} dmg={info.damage} level={info.level} canBlock={info.canBeBlocked}");
-				#endif
+#endif
 				recv.TakeHit(info, attacker);
 				return;
 			}
@@ -545,6 +545,39 @@ namespace FightingGame.Combat.Actors
 			{
 				StartCoroutine(DodgeInvulnCoroutine(dur));
 			}
+		}
+		public void TryPerformDodgeTeleport(float inputX)
+		{
+			if (stats == null)
+			{
+				return;
+			}
+			float distance = Mathf.Max(0f, stats.dodgeTeleportDistance);
+			if (distance <= 0f)
+			{
+				return;
+			}
+			float sign = 0f;
+			if (inputX > 0.1f) sign = 1f; else if (inputX < -0.1f) sign = -1f;
+			if (Mathf.Abs(sign) < 0.5f)
+			{
+				return; // no horizontal intent -> no teleport
+			}
+			Bounds b = bodyCollider ? bodyCollider.bounds : new Bounds(transform.position, new Vector3(1f, 2f, 0f));
+			Vector2 size = new Vector2(b.size.x * 0.98f, b.size.y * 0.98f);
+			Vector2 origin = b.center;
+			Vector2 dir = new Vector2(sign, 0f);
+			var hit = Physics2D.BoxCast(origin, size, 0f, dir, distance, groundMask);
+			float allowed = distance;
+			if (hit.collider != null)
+			{
+				allowed = Mathf.Max(0f, hit.distance - 0.01f);
+			}
+			if (allowed > 0f)
+			{
+				transform.position = new Vector3(transform.position.x + sign * allowed, transform.position.y, transform.position.z);
+			}
+			SetDodgeCooldown(stats.dodgeTeleportCooldown);
 		}
 		System.Collections.IEnumerator DodgeInvulnCoroutine(float seconds)
 		{
