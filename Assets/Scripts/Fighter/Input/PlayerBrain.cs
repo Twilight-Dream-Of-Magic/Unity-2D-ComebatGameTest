@@ -53,7 +53,8 @@ namespace Fighter.InputSystem
 
 		void FeedDirectionalTokens(float xInput, bool isJumpDown, bool isCrouchDown)
 		{
-			if (specialResolver == null) return;
+			if (specialResolver == null)
+				return;
 			// 方向（相對於面向）：按下瞬間才推送；不推 Neutral
 			float facingSign = (fighter != null && fighter.facingRight) ? 1f : -1f;
 			// 基於鍵位的瞬間：A/D 轉為相對 Forward/Back
@@ -61,14 +62,18 @@ namespace Fighter.InputSystem
 			bool dDown = Input.GetKeyDown(KeyCode.D);
 			if (aDown || dDown)
 			{
-				float rel = (aDown ? -1f : 0f) + (dDown ? 1f : 0f);
-				rel *= facingSign;
-				if (rel > 0.5f) specialResolver.Push(CommandToken.Forward);
-				else if (rel < -0.5f) specialResolver.Push(CommandToken.Back);
+				float relativeDirection = (aDown ? -1f : 0f) + (dDown ? 1f : 0f);
+				relativeDirection *= facingSign;
+				if (relativeDirection > 0.5f)
+					specialResolver.Push(CommandToken.Forward);
+				else if (relativeDirection < -0.5f)
+					specialResolver.Push(CommandToken.Back);
 			}
 			// 垂直（只記錄按下瞬間）
-			if (isCrouchDown) specialResolver.Push(CommandToken.Down);
-			if (isJumpDown) specialResolver.Push(CommandToken.Up);
+			if (isCrouchDown)
+				specialResolver.Push(CommandToken.Down);
+			if (isJumpDown)
+				specialResolver.Push(CommandToken.Up);
 		}
 
 		float _lastRel;
@@ -86,7 +91,11 @@ namespace Fighter.InputSystem
 			var runtimeConfig = Systems.RuntimeConfig.Instance;
 			var fighterCommands = new FightingGame.Combat.Actors.FighterCommands();
 			// 只保留 WASD
-			float x = 0f; if (Input.GetKey(KeyCode.A)) x -= 1f; if (Input.GetKey(KeyCode.D)) x += 1f;
+			float x = 0f;
+			if (Input.GetKey(KeyCode.A))
+				x -= 1f;
+			if (Input.GetKey(KeyCode.D))
+				x += 1f;
 			fighterCommands.moveX = x * horizontalScale;
 			bool jumpHeld = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.Space);
 			bool crouchHeld = Input.GetKey(KeyCode.S);
@@ -113,19 +122,28 @@ namespace Fighter.InputSystem
 			}
 
 			// 基礎攻擊：當前非攻擊中才直入
-			if (lightDown && fighter.CurrentMove == null) { fighter.EnterAttackHFSM("Light"); }
-			if (heavyDown && fighter.CurrentMove == null) { fighter.EnterAttackHFSM("Heavy"); }
+			if (lightDown && fighter.CurrentAction == null)
+			{
+				fighter.EnterAttackHFSM("Light");
+			}
+			if (heavyDown && fighter.CurrentAction == null)
+			{
+				fighter.EnterAttackHFSM("Heavy");
+			}
 
 			// Throw: direct domain call（不走序列）
 			if (Input.GetKeyDown(KeyCode.U))
 			{
-				var offens = fighter.HRoot?.Offense;
-				var opponentActor = fighter.opponent ? fighter.opponent.GetComponent<FightingGame.Combat.Actors.FighterActor>() : null;
-				if (offens != null)
+				FightingGame.Combat.State.HFSM.OffenseDomainState offense = fighter.HRoot?.Offense;
+				FightingGame.Combat.Actors.FighterActor opponentActor = fighter.opponent ? fighter.opponent.GetComponent<FightingGame.Combat.Actors.FighterActor>() : null;
+				if (offense != null)
 				{
-					if (!fighter.IsGrounded()) offens.BeginAirThrowFlat();
-					else if (opponentActor && opponentActor.PendingCommands.block && fighter.IsOpponentInThrowRange(1.0f)) offens.BeginGuardBreakThrowFlat();
-					else offens.BeginThrowFlat();
+					if (!fighter.IsGrounded())
+						offense.BeginAirThrowFlat();
+					else if (opponentActor && opponentActor.PendingCommands.block && fighter.IsOpponentInThrowRange(1.0f))
+						offense.BeginGuardBreakThrowFlat();
+					else
+						offense.BeginThrowFlat();
 				}
 			}
 

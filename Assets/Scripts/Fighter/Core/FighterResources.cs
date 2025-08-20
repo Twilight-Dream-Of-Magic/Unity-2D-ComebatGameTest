@@ -1,70 +1,128 @@
 using UnityEngine;
 
-namespace Fighter.Core {
-    /// <summary>
-    /// Encapsulates resource operations: HP and meter add/consume, and invulnerability toggles.
-    /// FighterController will delegate to this to keep responsibilities isolated.
-    /// 资源管理：统一处理气槽与生命的增减，以及上/下半身无敌切换；控制器通过该组件修改资源，便于解耦。
-    /// </summary>
-    public class FighterResources : MonoBehaviour {
-        /// <summary>Owning fighter controller. 所属角色控制器。</summary>
-        public FightingGame.Combat.Actors.FighterActor fighter;
+namespace Fighter.Core
+{
+	/// <summary>
+	/// Encapsulates resource operations: health and meter add/consume, and invulnerability toggles.
+	/// Fighter controller will delegate to this to keep responsibilities isolated.
+	/// 資源管理：統一處理氣槽與生命的增減，以及上/下半身無敵切換；控制器通過該組件修改資源，便於解耦。
+	/// </summary>
+	public class FighterResources : MonoBehaviour
+	{
+		/// <summary>Owning fighter controller. 所屬角色控制器。</summary>
+		public FightingGame.Combat.Actors.FighterActor fighter;
 
-        /// <summary>Raised when HP changes (current,max). 生命值变化事件（当前，最大）。</summary>
-        public System.Action<int,int> OnHealthChanged; // (current, max)
-        /// <summary>Raised when Meter changes (current,max). 气槽变化事件（当前，最大）。</summary>
-        public System.Action<int,int> OnMeterChanged;  // (current, max)
+		/// <summary>Raised when health changes (current, max). 生命值變化事件（當前，最大）。</summary>
+		public System.Action<int, int> OnHealthChanged;
 
-        void Awake() { if (!fighter) fighter = GetComponent<FightingGame.Combat.Actors.FighterActor>(); }
+		/// <summary>Raised when meter changes (current, max). 氣槽變化事件（當前，最大）。</summary>
+		public System.Action<int, int> OnMeterChanged;
 
-        void Start() {
-            // Broadcast initial values so UI binders render immediately
-            int maxHp = fighter && fighter.stats ? fighter.stats.maxHealth : 20000;
-            OnHealthChanged?.Invoke(fighter ? fighter.currentHealth : maxHp, maxHp);
-            OnMeterChanged?.Invoke(fighter ? fighter.meter : 0, fighter ? fighter.maxMeter : 2000);
-            #if UNITY_EDITOR
-            Debug.Log("[FighterResources] Broadcast initial HP/Meter to UI binders.");
-            #endif
-        }
+		private void Awake()
+		{
+			if (!fighter)
+			{
+				fighter = GetComponent<FightingGame.Combat.Actors.FighterActor>();
+			}
+		}
 
-        /// <summary>
-        /// Increase meter by value and notify listeners.
-        /// 增加气槽并通知监听者。
-        /// </summary>
-        public void IncreaseMeter(int value) {
-            int before = fighter.meter;
-            fighter.meter = Mathf.Clamp(fighter.meter + value, 0, fighter.maxMeter);
-            if (fighter.meter != before) OnMeterChanged?.Invoke(fighter.meter, fighter.maxMeter);
-        }
-        /// <summary>
-        /// Decrease meter by value if sufficient; returns true on success.
-        /// 扣除指定气槽（不足则返回 false）。
-        /// </summary>
-        public bool DecreaseMeter(int value) {
-            if (fighter.meter < value) return false;
-            fighter.meter -= value;
-            OnMeterChanged?.Invoke(fighter.meter, fighter.maxMeter);
-            return true;
-        }
-        /// <summary>
-        /// Increase health by value and notify listeners.
-        /// 增加生命并通知监听者。
-        /// </summary>
-        public void IncreaseHealth(int value) {
-            int maxHp = fighter.stats != null ? fighter.stats.maxHealth : 100;
-            int before = fighter.currentHealth;
-            fighter.currentHealth = Mathf.Clamp(fighter.currentHealth + value, 0, maxHp);
-            if (fighter.currentHealth != before) OnHealthChanged?.Invoke(fighter.currentHealth, maxHp);
-        }
-        /// <summary>
-        /// Decrease health by value (>0); delegates to IncreaseHealth with negative value.
-        /// 扣除生命（>0），内部通过负值调用 IncreaseHealth。
-        /// </summary>
-        public void DecreaseHealth(int value) { if (value <= 0) return; IncreaseHealth(-value); }
+		private void Start()
+		{
+			// Broadcast initial values so UI binders render immediately
+			int maximumHealth = fighter && fighter.stats ? fighter.stats.maxHealth : 20000;
+			int currentHealth = fighter ? fighter.currentHealth : maximumHealth;
+			OnHealthChanged?.Invoke(currentHealth, maximumHealth);
 
-        /// <summary>Set upper-body invulnerability. 设定上半身无敌。</summary>
-        public void SetUpperBodyInvuln(bool on) { fighter.SetUpperBodyInvuln(on); }
-        /// <summary>Set lower-body invulnerability. 设定下半身无敌。</summary>
-        public void SetLowerBodyInvuln(bool on) { fighter.SetLowerBodyInvuln(on); }
-    }
+			int maximumMeter = fighter && fighter.stats ? fighter.stats.maxMeter : 1000;
+			int currentMeter = fighter ? fighter.meter : 0;
+			OnMeterChanged?.Invoke(currentMeter, maximumMeter);
+
+#if UNITY_EDITOR
+			Debug.Log("[FighterResources] Broadcast initial Health and Meter to UI binders.");
+#endif
+		}
+
+		/// <summary>
+		/// Increase meter by value and notify listeners.
+		/// 增加氣槽並通知監聽者。
+		/// </summary>
+		public void IncreaseMeter(int value)
+		{
+			int meterBefore = fighter.meter;
+			int maximumMeter = fighter.stats != null ? fighter.stats.maxMeter : 1000;
+			int minimumMeter = fighter.stats != null ? fighter.stats.minMeter : 0;
+
+			fighter.meter = Mathf.Clamp(fighter.meter + value, minimumMeter, maximumMeter);
+
+			if (fighter.meter != meterBefore)
+			{
+				OnMeterChanged?.Invoke(fighter.meter, maximumMeter);
+			}
+		}
+
+		/// <summary>
+		/// Decrease meter by value if sufficient; returns true on success.
+		/// 扣除指定氣槽（不足則返回 false）。
+		/// </summary>
+		public bool DecreaseMeter(int value)
+		{
+			if (fighter.meter < value)
+			{
+				return false;
+			}
+
+			fighter.meter -= value;
+			int maximumMeter = fighter.stats != null ? fighter.stats.maxMeter : 1000;
+			OnMeterChanged?.Invoke(fighter.meter, maximumMeter);
+			return true;
+		}
+
+		/// <summary>
+		/// Increase health by value and notify listeners.
+		/// 增加生命並通知監聽者。
+		/// </summary>
+		public void IncreaseHealth(int value)
+		{
+			int maximumHealth = fighter.stats != null ? fighter.stats.maxHealth : 100;
+			int healthBefore = fighter.currentHealth;
+			int minimumHealth = fighter.stats != null ? fighter.stats.minHealth : 0;
+
+			fighter.currentHealth = Mathf.Clamp(fighter.currentHealth + value, minimumHealth, maximumHealth);
+
+			if (fighter.currentHealth != healthBefore)
+			{
+				OnHealthChanged?.Invoke(fighter.currentHealth, maximumHealth);
+			}
+		}
+
+		/// <summary>
+		/// Decrease health by value (>0); delegates to IncreaseHealth with negative value.
+		/// 扣除生命（>0），內部通過負值調用 IncreaseHealth。
+		/// </summary>
+		public void DecreaseHealth(int value)
+		{
+			if (value <= 0)
+			{
+				return;
+			}
+
+			IncreaseHealth(-value);
+		}
+
+		/// <summary>
+		/// Set upper-body invulnerability. 設定上半身無敵。
+		/// </summary>
+		public void SetUpperBodyInvulnerability(bool on)
+		{
+			fighter.SetUpperBodyInvulnerable(on);
+		}
+
+		/// <summary>
+		/// Set lower-body invulnerability. 設定下半身無敵。
+		/// </summary>
+		public void SetLowerBodyInvulnerability(bool on)
+		{
+			fighter.SetLowerBodyInvulnerable(on);
+		}
+	}
 }

@@ -76,12 +76,10 @@
     <Compile Include="Assets\Scripts\UI\HUD\HealthBarView.cs" />
     <Compile Include="Assets\Scripts\Dev\ArenaBuilder.cs" />
     <Compile Include="Assets\Scripts\Data\CombatActionDefinition.cs" />
-    <Compile Include="Assets\Scripts\Systems\GameManager.cs" />
     <Compile Include="Assets\Scripts\UI\HUD\WorldStateBillboard.cs" />
+    <Compile Include="Assets\Scripts\Systems\GameManager.cs" />
     <Compile Include="Assets\Scripts\Fighter\Input\AIBrain.cs" />
-    <Compile Include="Assets\Scripts\Dev\DemoAutoRunner.cs" />
     <Compile Include="Assets\Scripts\Fighter\AI\AIConfig.cs" />
-    <Compile Include="Assets\Scripts\Fighter\Actors\FighterController.Core.cs" />
     <Compile Include="Assets\Scripts\UI\HUD\FloatingDamageText.cs" />
     <Compile Include="Assets\Scripts\Fighter\Core\JumpRule.cs" />
     <Compile Include="Assets\Scripts\Combat\BodyVolume.cs" />
@@ -89,9 +87,7 @@
     <Compile Include="Assets\Scripts\UI\HUD\HeadStatePresenter.cs" />
     <Compile Include="Assets\Scripts\Systems\AudioManager.cs" />
     <Compile Include="Assets\Scripts\Dev\FightLinker.cs" />
-    <Compile Include="Assets\Scripts\Combat\InputBuffer.cs" />
     <Compile Include="Assets\Scripts\Fighter\Core\HeadStateAnchor.cs" />
-    <Compile Include="Assets\Scripts\Framework\LazySingleton.cs" />
     <Compile Include="Assets\Scripts\Combat\GuardEvaluator.cs" />
     <Compile Include="Assets\Scripts\Combat\Commands.cs" />
     <Compile Include="Assets\Scripts\Combat\Hurtbox.cs" />

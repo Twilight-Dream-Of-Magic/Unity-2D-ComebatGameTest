@@ -2,102 +2,166 @@ using UnityEngine;
 using Systems;
 using FightingGame.Combat;
 
-namespace Fighter.Core {
-    /// <summary>
-    /// Encapsulates locomotion: ground/air movement, jumping, auto-facing, grounded checks.
-    /// Keeps logic out of FighterController while exposing simple operations.
-    /// 位移封装：地面/空中移动、跳跃、自动朝向、落地检测；将细节从控制器中剥离，暴露简洁操作。
-    /// </summary>
-    public class FighterLocomotion : MonoBehaviour {
-        public FightingGame.Combat.Actors.FighterActor fighter;
-        public new Rigidbody2D rigidbody2D;
-        public CapsuleCollider2D bodyCollider;
-        public Animator animator;
-        public bool enableBodyPushout = false;
+namespace Fighter.Core
+{
+	/// <summary>
+	/// Encapsulates locomotion: ground and air movement, jumping, auto-facing, grounded checks.
+	/// 封裝角色位移：地面/空中移動、跳躍、自動朝向、落地檢測。
+	/// 責任：提供簡單操作，將細節與物理處理從控制器中抽離。
+	/// </summary>
+	public class FighterLocomotion : MonoBehaviour
+	{
+		[Header("References")]
+		public FightingGame.Combat.Actors.FighterActor fighter; // 角色實例
+		public new Rigidbody2D rigidbody;                       // 物理剛體
+		public CapsuleCollider2D bodyCollider;                  // 身體膠囊碰撞體
+		public Animator animator;                               // 動畫器
 
-        void Awake() {
-            if (!fighter) fighter = GetComponent<FightingGame.Combat.Actors.FighterActor>();
-            if (!rigidbody2D) rigidbody2D = GetComponent<Rigidbody2D>();
-            if (!bodyCollider) bodyCollider = GetComponent<CapsuleCollider2D>();
-            if (!animator) animator = GetComponent<Animator>();
-        }
+		[Header("Config")]
+		public bool enableBodyPushOut = false;                  // 是否啟用角色間推擠避免重疊
 
-        /// <summary>Ground move by input scale. 地面移动。</summary>
-        public void Move(float x) {
-            rigidbody2D.velocity = new Vector2(x * (fighter.stats != null ? fighter.stats.walkSpeed : 6f), rigidbody2D.velocity.y);
-            if (enableBodyPushout) ResolveOverlapPushout();
-        }
+		private void Awake()
+		{
+			if (!fighter)
+				fighter = GetComponent<FightingGame.Combat.Actors.FighterActor>();
+			if (!rigidbody)
+				rigidbody = GetComponent<Rigidbody2D>();
+			if (!bodyCollider)
+				bodyCollider = GetComponent<CapsuleCollider2D>();
+			if (!animator)
+				animator = GetComponent<Animator>();
+		}
 
-        /// <summary>Stop horizontal velocity. 停止水平速度。</summary>
-        public void HaltHorizontal() {
-            rigidbody2D.velocity = new Vector2(0, rigidbody2D.velocity.y);
-        }
+		/// <summary>
+		/// Move fighter on the ground according to input scale.
+		/// 依輸入比例執行地面移動。
+		/// </summary>
+		public void Move(float inputX)
+		{
+			float speed = fighter.stats != null ? fighter.stats.walkSpeed : 6f;
+			rigidbody.velocity = new Vector2(inputX * speed, rigidbody.velocity.y);
+			if (enableBodyPushOut)
+				ResolveOverlapPushOut();
+		}
 
-        /// <summary>Air move by input scale. 空中位移。</summary>
-        public void AirMove(float x) {
-            rigidbody2D.velocity = new Vector2(x * (fighter.stats != null ? fighter.stats.walkSpeed : 6f), rigidbody2D.velocity.y);
-            if (enableBodyPushout) ResolveOverlapPushout();
-        }
+		/// <summary>
+		/// Stop horizontal movement completely.
+		/// 停止水平速度。
+		/// </summary>
+		public void HaltHorizontal()
+		{
+			rigidbody.velocity = new Vector2(0, rigidbody.velocity.y);
+		}
 
-        /// <summary>Perform jump and optionally trigger animation. 执行起跳并触发动画。</summary>
-        public void Jump() {
-            rigidbody2D.velocity = new Vector2(rigidbody2D.velocity.x, fighter.stats != null ? fighter.stats.jumpForce : 12f);
-            if (animator && animator.runtimeAnimatorController) animator.SetTrigger("Jump");
-        }
+		/// <summary>
+		/// Move fighter in the air according to input scale.
+		/// 依輸入比例執行空中移動。
+		/// </summary>
+		public void AirMove(float inputX)
+		{
+			float speed = fighter.stats != null ? fighter.stats.walkSpeed : 6f;
+			rigidbody.velocity = new Vector2(inputX * speed, rigidbody.velocity.y);
+			if (enableBodyPushOut)
+				ResolveOverlapPushOut();
+		}
 
-        /// <summary>OverlapBox grounded check. 落地检测。</summary>
-        public bool IsGrounded(LayerMask groundMask) {
-            if (!bodyCollider) return Physics2D.Raycast(transform.position, Vector2.down, 0.2f, groundMask);
-            var b = bodyCollider.bounds;
-            Vector2 boxCenter = new Vector2(b.center.x, b.min.y - 0.05f);
-            Vector2 boxSize = new Vector2(b.size.x * 0.9f, 0.1f);
-            return Physics2D.OverlapBox(boxCenter, boxSize, 0f, groundMask) != null;
-        }
+		/// <summary>
+		/// Perform a jump with vertical velocity and optional animation trigger.
+		/// 執行跳躍並觸發動畫。
+		/// </summary>
+		public void Jump()
+		{
+			float jumpForce = fighter.stats != null ? fighter.stats.jumpForce : 12f;
+			rigidbody.velocity = new Vector2(rigidbody.velocity.x, jumpForce);
+			if (animator && animator.runtimeAnimatorController)
+				animator.SetTrigger("Jump");
+		}
 
-        /// <summary>Auto face opponent along X. 自动朝向对手。</summary>
-        public void AutoFaceOpponent() {
-            if (!fighter || !fighter.opponent) return;
-            bool shouldFaceRight = transform.position.x <= fighter.opponent.position.x;
-            if (shouldFaceRight != fighter.facingRight) {
-                fighter.facingRight = shouldFaceRight;
-                var s = transform.localScale; s.x = Mathf.Abs(s.x) * (fighter.facingRight ? 1 : -1); transform.localScale = s;
-            }
-        }
+		/// <summary>
+		/// Check if fighter is grounded using OverlapBox or Raycast fallback.
+		/// 使用重疊盒檢測是否在地面上。
+		/// </summary>
+		public bool IsGrounded(LayerMask groundMask)
+		{
+			if (!bodyCollider)
+				return Physics2D.Raycast(transform.position, Vector2.down, 0.2f, groundMask);
+			Bounds bounds = bodyCollider.bounds;
+			Vector2 boxCenter = new Vector2(bounds.center.x, bounds.min.y - 0.05f);
+			Vector2 boxSize = new Vector2(bounds.size.x * 0.9f, 0.1f);
+			return Physics2D.OverlapBox(boxCenter, boxSize, 0f, groundMask) != null;
+		}
 
-        /// <summary>Freeze/unfreeze animator and body. 冻结/解冻动画与刚体。</summary>
-        public void ApplyFreezeVisual(bool frozen) {
-            if (animator) animator.speed = frozen ? 0f : 1f;
-            if (rigidbody2D) rigidbody2D.simulated = !frozen;
-        }
+		/// <summary>
+		/// Automatically face opponent horizontally.
+		/// 自動朝向對手。
+		/// </summary>
+		public void AutoFaceOpponent()
+		{
+			if (!fighter || !fighter.opponent) return;
+			bool shouldFaceRight = transform.position.x <= fighter.opponent.position.x;
+			if (shouldFaceRight != fighter.facingRight)
+			{
+				fighter.facingRight = shouldFaceRight;
+				Vector3 scale = transform.localScale;
+				scale.x = Mathf.Abs(scale.x) * (fighter.facingRight ? 1 : -1);
+				transform.localScale = scale;
+			}
+		}
 
-        /// <summary>Nudge position by deltaX (FixedUpdate safe). 水平推移。</summary>
-        public void NudgeHorizontal(float deltaX) {
-            if (Mathf.Abs(deltaX) <= 0.0001f) return;
-            var pos = rigidbody2D.position;
-            float targetX = pos.x + deltaX;
-            rigidbody2D.MovePosition(new Vector2(targetX, pos.y));
-        }
+		/// <summary>
+		/// Freeze or unfreeze animator and physics simulation.
+		/// 凍結或解凍動畫與物理。
+		/// </summary>
+		public void ApplyFreezeVisual(bool frozen)
+		{
+			if (animator)
+				animator.speed = frozen ? 0f : 1f;
+			if (rigidbody)
+				rigidbody.simulated = !frozen;
+		}
 
-        // Simple pushout to avoid interpenetration and wall trap
-        void ResolveOverlapPushout() {
-            if (!bodyCollider) return;
-            var b = bodyCollider.bounds;
-            // push from other fighters' body volumes
-            var hits = Physics2D.OverlapBoxAll(b.center, b.size * 0.98f, 0f);
-            foreach (var h in hits) {
-                if (h == null || h.attachedRigidbody == rigidbody2D) continue;
-                if (h.GetComponent<BodyVolume>() == null) continue;
-                var other = h.bounds;
-                if (!b.Intersects(other)) continue;
-                float dxLeft = other.max.x - b.min.x;
-                float dxRight = b.max.x - other.min.x;
-                // choose minimal horizontal separation direction
-                float push = Mathf.Abs(dxLeft) < Mathf.Abs(dxRight) ? -dxLeft : dxRight;
-                rigidbody2D.position += new Vector2(push * 1.01f, 0f);
-            }
-            // clamp to simple arena bounds (optional): -10..10
-            float x = Mathf.Clamp(rigidbody2D.position.x, -10f, 10f);
-            rigidbody2D.position = new Vector2(x, rigidbody2D.position.y);
-        }
-    }
+		/// <summary>
+		/// Slightly nudge position horizontally (safe in FixedUpdate).
+		/// 輕微水平推移（適用於 FixedUpdate）。
+		/// </summary>
+		public void NudgeHorizontal(float deltaX)
+		{
+			if (Mathf.Abs(deltaX) <= 0.0001f)
+				return;
+			Vector2 pos = rigidbody.position;
+			float targetX = pos.x + deltaX;
+			rigidbody.MovePosition(new Vector2(targetX, pos.y));
+		}
+
+		/// <summary>
+		/// Resolve overlap by pushing fighter away from other body volumes.
+		/// 避免角色之間重疊並推開，防止牆角困住。
+		/// </summary>
+		private void ResolveOverlapPushOut()
+		{
+			if (!bodyCollider)
+				return;
+			Bounds bounds = bodyCollider.bounds;
+			Collider2D[] hits = Physics2D.OverlapBoxAll(bounds.center, bounds.size * 0.98f, 0f);
+			foreach (var hit in hits)
+			{
+				if (hit == null || hit.attachedRigidbody == rigidbody)
+					continue;
+				if (hit.GetComponent<BodyVolume>() == null)
+					continue;
+
+				Bounds other = hit.bounds;
+				if (!bounds.Intersects(other)) continue;
+
+				float deltaLeft = other.max.x - bounds.min.x;
+				float deltaRight = bounds.max.x - other.min.x;
+				float push = Mathf.Abs(deltaLeft) < Mathf.Abs(deltaRight) ? -deltaLeft : deltaRight;
+				rigidbody.position += new Vector2(push * 1.01f, 0f);
+			}
+
+			// Clamp to arena bounds (demo only, optional)
+			float x = Mathf.Clamp(rigidbody.position.x, -10f, 10f);
+			rigidbody.position = new Vector2(x, rigidbody.position.y);
+		}
+	}
 }

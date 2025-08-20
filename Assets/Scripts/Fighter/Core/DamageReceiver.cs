@@ -1,140 +1,192 @@
 using UnityEngine;
 using FightingGame.Combat;
 
-namespace Fighter.Core {
+namespace Fighter.Core
+{
 	/// <summary>
-	/// Handles receiving damage and routing to Defense flat FSM states.
+	/// Handles receiving damage and routing to defense finite state machine states.
+	/// 負責處理角色受傷並路由到防禦狀態機。
 	/// </summary>
-	public class DamageReceiver : MonoBehaviour {
-		public FightingGame.Combat.Actors.FighterActor fighter;
-		public Animator animator;
+	public class DamageReceiver : MonoBehaviour
+	{
+		[Header("References")]
+		public FightingGame.Combat.Actors.FighterActor fighter; // Reference to the fighter actor / 角色實例
+		public Animator animator;                               // Animator reference / 動畫器
 
-		void Awake() {
+		private void Awake()
+		{
 			if (!fighter)
 			{
 				fighter = GetComponent<FightingGame.Combat.Actors.FighterActor>();
 			}
+
 			if (!animator)
 			{
 				animator = GetComponent<Animator>();
 			}
 		}
 
-		public void TakeHit(DamageInfo info, FightingGame.Combat.Actors.FighterActor attacker) {
-			// Dodge: fully invulnerable to all but super
-			if (fighter != null && fighter.GetCurrentStateName() == "Dodge" && !info.isSuper)
+		/// <summary>
+		/// Process an incoming hit and apply damage, block, or invulnerability checks.
+		/// 處理進攻方輸入的打擊，應用傷害、防禦或無敵判定。
+		/// </summary>
+		/// <param name="damageInfo">Damage information / 傷害資訊</param>
+		/// <param name="attacker">The attacking fighter / 攻擊方角色</param>
+		public void TakeHit(DamageInfo damageInfo, FightingGame.Combat.Actors.FighterActor attacker)
+		{
+			// === Dodge invulnerability (except super) / 閃避無敵（超必殺除外） ===
+			if (fighter != null && fighter.GetCurrentStateName() == "Dodge" && !damageInfo.isSuper)
 			{
-				#if UNITY_EDITOR
-				Debug.Log($"[DamageReceiver] DODGE i-frame ignored non-super hit on {fighter?.name}");
-				#endif
+#if UNITY_EDITOR
+				Debug.Log("[DamageReceiver] Dodge invulnerability ignored a non-super hit on " + (fighter != null ? fighter.name : "<null>"));
+#endif
 				return;
 			}
-			if ((info.level == HitLevel.High || info.level == HitLevel.Overhead) && fighter.UpperBodyInvuln)
+
+			// === Upper body invulnerability ===
+			if ((damageInfo.level == HitLevel.High || damageInfo.level == HitLevel.Overhead) && fighter.UpperBodyInvulnerable)
 			{
-				#if UNITY_EDITOR
-				Debug.Log($"[DamageReceiver] Upper-body invulnerability ignored hit on {fighter?.name}");
-				#endif
+#if UNITY_EDITOR
+				Debug.Log("[DamageReceiver] Upper body invulnerability ignored the hit on " + (fighter != null ? fighter.name : "<null>"));
+#endif
 				return;
 			}
-			if ((info.level == HitLevel.Low) && fighter.LowerBodyInvuln)
+
+			// === Lower body invulnerability ===
+			if (damageInfo.level == HitLevel.Low && fighter.LowerBodyInvulnerable)
 			{
-				#if UNITY_EDITOR
-				Debug.Log($"[DamageReceiver] Lower-body invulnerability ignored hit on {fighter?.name}");
-				#endif
+#if UNITY_EDITOR
+				Debug.Log("[DamageReceiver] Lower body invulnerability ignored the hit on " + (fighter != null ? fighter.name : "<null>"));
+#endif
 				return;
 			}
-			bool blocked = false;
-			var cfg = Systems.RuntimeConfig.Instance;
-			if (cfg != null)
+
+			// === Blocking check ===
+			bool isBlocked = false;
+			Systems.RuntimeConfig runtimeConfig = Systems.RuntimeConfig.Instance;
+
+			if (runtimeConfig != null)
 			{
-				blocked = GuardEvaluator.CanBlockTimed(fighter, fighter.PendingCommands.block, fighter.IsGrounded(), fighter.IsCrouching, info.level, cfg.blockMaxHoldSeconds) && info.canBeBlocked;
+				isBlocked = GuardEvaluator.CanBlockTimed(
+					fighter,
+					fighter.PendingCommands.block,
+					fighter.IsGrounded(),
+					fighter.IsCrouching,
+					damageInfo.level,
+					runtimeConfig.blockMaxHoldSeconds
+				) && damageInfo.canBeBlocked;
+
+				// If holding block too long, trigger a temporary lock cooldown
 				// 若玩家持續按住超過窗口，觸發一次鎖定冷卻
-				if (!blocked && fighter.PendingCommands.block && fighter.GetBlockHeldSeconds() > cfg.blockMaxHoldSeconds)
+				if (!isBlocked && fighter.PendingCommands.block && fighter.GetBlockHeldSeconds() > runtimeConfig.blockMaxHoldSeconds)
 				{
-					// 設置鎖定時間（通過外部方法避免直接引用私有欄位）
-					fighter.gameObject.SendMessage("__LockBlockForSeconds", cfg.blockCooldownSeconds, SendMessageOptions.DontRequireReceiver);
+					fighter.gameObject.SendMessage("__LockBlockForSeconds", runtimeConfig.blockCooldownSeconds, SendMessageOptions.DontRequireReceiver);
 				}
 			}
-			var resources = fighter.GetComponent<Fighter.Core.FighterResources>();
-			int before = fighter.currentHealth;
-			if (!blocked)
+
+			FighterResources resourceComponent = fighter.GetComponent<Fighter.Core.FighterResources>();
+			int healthBefore = fighter.currentHealth;
+
+			if (!isBlocked)
 			{
-				#if UNITY_EDITOR
-				if (attacker && attacker.team == FightingGame.Combat.Actors.FighterTeam.AI && fighter.team == FightingGame.Combat.Actors.FighterTeam.Player)
+				// === Apply damage ===
+				int nonNegativeDamage = Mathf.Max(0, damageInfo.damage);
+				int healthAfter = Mathf.Max(0, healthBefore - nonNegativeDamage);
+
+#if UNITY_EDITOR
+				string attackerName = attacker != null ? attacker.name : "<null>";
+				string defenderName = fighter != null ? fighter.name : "<null>";
+				Debug.Log("[DamageReceiver] HIT  attacker=" + attackerName + "  defender=" + defenderName + "  damage=" + nonNegativeDamage + "  health=" + healthBefore + "->" + healthAfter);
+#endif
+
+				if (resourceComponent != null)
 				{
-					Debug.Log($"[AI->Player] HIT dmg={info.damage} hp={before}->{Mathf.Max(0, before - Mathf.Max(0, info.damage))}");
-				}
-				if (attacker && attacker.team == FightingGame.Combat.Actors.FighterTeam.Player && fighter.team == FightingGame.Combat.Actors.FighterTeam.AI)
-				{
-					Debug.Log($"[Player->AI] HIT dmg={info.damage} hp={before}->{Mathf.Max(0, before - Mathf.Max(0, info.damage))}");
-				}
-				Debug.Log($"[DamageReceiver] HIT {attacker?.name} -> {fighter?.name} dmg={info.damage} hp={before}->{Mathf.Max(0, before - Mathf.Max(0, info.damage))}");
-				#endif
-				int damage = Mathf.Max(0, info.damage);
-				if (resources)
-				{
-					resources.DecreaseHealth(damage);
+					resourceComponent.DecreaseHealth(nonNegativeDamage);
 				}
 				else
 				{
-					fighter.currentHealth = Mathf.Max(0, fighter.currentHealth - damage);
+					fighter.currentHealth = healthAfter;
 				}
-				if (animator && animator.runtimeAnimatorController)
+
+				if (animator != null && animator.runtimeAnimatorController != null)
 				{
 					animator.SetTrigger("Hit");
 				}
-				fighter.MarkHitConfirmed(info.hitstopOnHit);
-				Systems.CameraShaker.Instance?.Shake(0.1f, info.hitstopOnHit);
-				// Meter 獎勵僅在開啟特殊系統時才生效
-				if (attacker && Systems.RuntimeConfig.Instance != null && Systems.RuntimeConfig.Instance.specialsEnabled)
+
+				fighter.MarkHitConfirmed(damageInfo.hitstopOnHit);
+				Systems.CameraShaker.Instance?.Shake(0.1f, damageInfo.hitstopOnHit);
+
+				// Award meter to attacker if the special system is enabled / 攻擊方獲得氣槽（若系統啟用）
+				if (attacker != null && Systems.RuntimeConfig.Instance != null && Systems.RuntimeConfig.Instance.specialsEnabled)
 				{
-					var atkRes = attacker.GetComponent<Fighter.Core.FighterResources>();
-					if (atkRes && info.meterOnHit > 0) atkRes.IncreaseMeter(info.meterOnHit);
-				}
-				Systems.DamageBus.Raise(Mathf.Max(0, info.damage), fighter.transform.position + new Vector3(0f, 1f, 0f), false, attacker, fighter);
-				var def = fighter.HRoot != null ? fighter.HRoot.Defense : null;
-				if (def != null)
-				{
-					if (info.knockdownKind != KnockdownKind.None)
+					FighterResources attackerResources = attacker.GetComponent<Fighter.Core.FighterResources>();
+					if (attackerResources != null && damageInfo.meterOnHit > 0)
 					{
-						def.BeginDownedFlat(info.knockdownKind == KnockdownKind.Hard, info.hitstun);
+						attackerResources.IncreaseMeter(damageInfo.meterOnHit);
+					}
+				}
+
+				Systems.DamageBus.Raise(
+					Mathf.Max(0, damageInfo.damage),
+					fighter.transform.position + new Vector3(0f, 1f, 0f),
+					false,
+					attacker,
+					fighter
+				);
+
+				var defense = fighter.HRoot != null ? fighter.HRoot.Defense : null;
+				if (defense != null)
+				{
+					if (damageInfo.knockdownKind != KnockdownKind.None)
+					{
+						bool isHardKnockdown = damageInfo.knockdownKind == KnockdownKind.Hard;
+						defense.BeginDownedFlat(isHardKnockdown, damageInfo.hitstun);
 					}
 					else
 					{
-						def.BeginHitstunFlat(info.hitstun);
+						defense.BeginHitstunFlat(damageInfo.hitstun);
 					}
 				}
 			}
 			else
 			{
-				#if UNITY_EDITOR
-				if (attacker && attacker.team == FightingGame.Combat.Actors.FighterTeam.AI && fighter.team == FightingGame.Combat.Actors.FighterTeam.Player)
+				// === Blocked ===
+#if UNITY_EDITOR
+				string attackerName = attacker != null ? attacker.name : "<null>";
+				string defenderName = fighter != null ? fighter.name : "<null>";
+				Debug.Log("[DamageReceiver] BLOCK  attacker=" + attackerName + "  defender=" + defenderName + "  level=" + damageInfo.level);
+#endif
+
+				fighter.MarkHitConfirmed(damageInfo.hitstopOnBlock);
+				Systems.CameraShaker.Instance?.Shake(0.05f, damageInfo.hitstopOnBlock);
+
+				if (attacker != null && Systems.RuntimeConfig.Instance != null && Systems.RuntimeConfig.Instance.specialsEnabled)
 				{
-					Debug.Log($"[AI->Player] BLOCKED level={info.level}");
+					FighterResources attackerResources = attacker.GetComponent<Fighter.Core.FighterResources>();
+					if (attackerResources != null && damageInfo.meterOnBlock > 0)
+					{
+						attackerResources.IncreaseMeter(damageInfo.meterOnBlock);
+					}
 				}
-				if (attacker && attacker.team == FightingGame.Combat.Actors.FighterTeam.Player && fighter.team == FightingGame.Combat.Actors.FighterTeam.AI)
+
+				Systems.DamageBus.Raise(
+					0,
+					fighter.transform.position + new Vector3(0f, 1f, 0f),
+					true,
+					attacker,
+					fighter
+				);
+
+				var defense = fighter.HRoot != null ? fighter.HRoot.Defense : null;
+				if (defense != null)
 				{
-					Debug.Log($"[Player->AI] BLOCKED level={info.level}");
-				}
-				Debug.Log($"[DamageReceiver] BLOCK {attacker?.name} -> {fighter?.name} level={info.level}");
-				#endif
-				fighter.MarkHitConfirmed(info.hitstopOnBlock);
-				Systems.CameraShaker.Instance?.Shake(0.05f, info.hitstopOnBlock);
-				if (attacker && Systems.RuntimeConfig.Instance != null && Systems.RuntimeConfig.Instance.specialsEnabled)
-				{
-					var atkRes = attacker.GetComponent<Fighter.Core.FighterResources>();
-					if (atkRes && info.meterOnBlock > 0) atkRes.IncreaseMeter(info.meterOnBlock);
-				}
-				Systems.DamageBus.Raise(0, fighter.transform.position + new Vector3(0f, 1f, 0f), true, attacker, fighter);
-				var def = fighter.HRoot != null ? fighter.HRoot.Defense : null;
-				if (def != null)
-				{
-					bool crouchingGuard = fighter.IsCrouching || fighter.PendingCommands.crouch;
-					def.Flat.ChangeState(new FightingGame.Combat.State.HFSM.DefenseDomainState.BlockFlat(fighter, crouchingGuard));
+					bool isCrouchingGuard = fighter.IsCrouching || fighter.PendingCommands.crouch;
+					defense.Flat.ChangeState(new FightingGame.Combat.State.HFSM.DefenseDomainState.BlockFlat(fighter, isCrouchingGuard));
 				}
 			}
 
-			if (fighter.currentHealth < before)
+			// === Notify damage received ===
+			if (fighter.currentHealth < healthBefore)
 			{
 				fighter.NotifyDamagedForReceivers(attacker);
 			}

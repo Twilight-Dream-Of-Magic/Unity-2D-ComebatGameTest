@@ -5,9 +5,9 @@ namespace FightingGame.Combat.State
 	public abstract class FSMState
 	{
 		public readonly FightingGame.Combat.Actors.FighterActor Fighter;
-		protected FSMState(FightingGame.Combat.Actors.FighterActor f)
+		protected FSMState(FightingGame.Combat.Actors.FighterActor actor)
 		{
-			Fighter = f;
+			Fighter = actor;
 		}
 		public virtual string Name => GetType().Name;
 		public virtual void OnEnter() { }

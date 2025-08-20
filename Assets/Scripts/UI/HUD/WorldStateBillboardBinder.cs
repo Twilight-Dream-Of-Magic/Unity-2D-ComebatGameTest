@@ -25,7 +25,7 @@ namespace UI.HUD {
 				fighter.OnStateChanged += OnStateChanged;
 			}
 			// 初始一次
-			OnStateChanged(fighter != null ? fighter.GetCurrentStateName() : "--", fighter != null ? fighter.debugMoveName : string.Empty);
+			OnStateChanged(fighter != null ? fighter.GetCurrentStateName() : "--", fighter != null ? fighter.DebugActionName : string.Empty);
 		}
 		void OnDisable() {
 			if (fighter != null)

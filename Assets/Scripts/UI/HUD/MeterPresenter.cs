@@ -57,7 +57,7 @@ namespace UI.HUD {
 		}
 		void HydrateOnce() {
 			var f = isP1 ? round?.p1 : round?.p2;
-			if (f != null) { OnMeter(f.meter, f.maxMeter); }
+			if (f != null) { OnMeter(f.meter, f.stats != null ? f.stats.maxMeter : 1000); }
 		}
 		public void ForceRebind() {
 			if (round == null) { round = Systems.RoundManager.Instance; }

@@ -476,8 +476,8 @@ namespace Fighter.InputSystem
 			{
 				stateUntil = Time.time + reevaluateInterval;
 				var opp = fighter.opponent.GetComponent<FightingGame.Combat.Actors.FighterActor>();
-				bool opponentThreat = opp && opp.debugHitActive;
-				bool opponentWhiff = opp && !opp.debugHitActive && Random.value < 0.25f;
+				bool opponentThreat = opp && opp.DebugHitActive;
+				bool opponentWhiff = opp && !opp.DebugHitActive && Random.value < 0.25f;
 				bool opponentDown = opp && (opp.GetCurrentStateName().StartsWith("Downed") || opp.GetCurrentStateName() == "Wakeup");
 
 				if (opponentDown)
@@ -546,7 +546,7 @@ namespace Fighter.InputSystem
 			protected void MaybeEnterDefense(ref FightingGame.Combat.Actors.FighterCommands commands)
 			{
 				var opp = fighter.opponent.GetComponent<FightingGame.Combat.Actors.FighterActor>();
-				if (opp && opp.debugHitActive)
+				if (opp && opp.DebugHitActive)
 				{
 					if (Random.value < cfg.blockProbability)
 					{

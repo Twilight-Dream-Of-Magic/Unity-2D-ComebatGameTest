@@ -1,21 +1,32 @@
 using UnityEngine;
 using Systems;
 
-namespace Dev {
+namespace Dev
+{
 	/// <summary>
 	/// Ensures global managers and camera framing exist for a dev scene.
-	/// 只做“存在性保障”，不承担遊戲邏輯。
+	/// 只做“存在性保障”，不承擔遊戲邏輯。
 	/// </summary>
-	public static class ManagersBootstrapper {
-		public static void EnsureManagers(Vector2 arenaHalfExtents) {
+	public static class ManagersBootstrapper
+	{
+		/// <summary>
+		/// Ensure that essential manager objects exist in the scene.
+		/// 確保開發場景中存在必要的全域管理器與攝影機配置。
+		/// </summary>
+		/// <param name="arenaHalfExtents">Arena half extents (x=half width, y=half height). 場地半尺寸。</param>
+		public static void EnsureManagers(Vector2 arenaHalfExtents)
+		{
+			// === Core Managers ===
 			if (!Object.FindObjectOfType<GameManager>())
 			{
 				new GameObject("GameManager").AddComponent<GameManager>();
 			}
+
 			if (!Object.FindObjectOfType<FrameClock>())
 			{
 				new GameObject("FrameClock").AddComponent<FrameClock>();
 			}
+
 			if (!Object.FindObjectOfType<AudioManager>())
 			{
 				var audioManagerObject = new GameObject("AudioManager");
@@ -23,6 +34,8 @@ namespace Dev {
 				audioManager.bgmSource = audioManagerObject.AddComponent<AudioSource>();
 				audioManager.sfxSource = audioManagerObject.AddComponent<AudioSource>();
 			}
+
+			// === Camera & Framer ===
 			if (!Object.FindObjectOfType<CameraShaker>())
 			{
 				var cameraObject = Camera.main ? Camera.main.gameObject : new GameObject("Main Camera", typeof(Camera));
@@ -35,6 +48,7 @@ namespace Dev {
 				cameraComponent.orthographic = true;
 				cameraComponent.orthographicSize = 3.5f;
 				cameraObject.transform.position = new Vector3(0, 0, -10);
+
 				var cameraFramer = cameraObject.GetComponent<Systems.CameraFramer>();
 				if (!cameraFramer)
 				{
@@ -42,19 +56,25 @@ namespace Dev {
 				}
 				cameraFramer.arenaHalfExtents = arenaHalfExtents;
 			}
+
+			// === Gameplay Feedback Systems ===
 			if (!Object.FindObjectOfType<HitEffectManager>())
 			{
 				new GameObject("HitEffectManager").AddComponent<HitEffectManager>();
 			}
+
 			if (!Object.FindObjectOfType<ComboCounter>())
 			{
 				new GameObject("ComboCounter").AddComponent<ComboCounter>();
 			}
+
 			if (!Object.FindObjectOfType<RuntimeConfig>())
 			{
 				new GameObject("RuntimeConfig").AddComponent<RuntimeConfig>();
 			}
+
 			// Ensure RoundManager exists early so UI presenters can bind in OnEnable
+			// 確保 RoundManager 及早存在，方便 UI 綁定。
 			if (!Object.FindObjectOfType<Systems.RoundManager>())
 			{
 				new GameObject("RoundManager").AddComponent<Systems.RoundManager>().roundTime = 300f;

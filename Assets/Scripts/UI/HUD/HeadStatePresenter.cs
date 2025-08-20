@@ -50,7 +50,7 @@ namespace UI.HUD {
 					stateText.color = p1 ? new Color(0.9f, 0.95f, 1f, 1f) : new Color(1f, 0.85f, 0.85f, 1f);
 					if (string.IsNullOrEmpty(stateText.text)) { stateText.text = "--"; }
 				}
-				OnState(fighter.GetCurrentStateName(), fighter.debugMoveName ?? "");
+				OnState(fighter.GetCurrentStateName(), fighter.DebugActionName ?? "");
 			}
 			else if (stateText != null)
 			{
