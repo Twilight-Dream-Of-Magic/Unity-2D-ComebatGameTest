@@ -46,7 +46,7 @@ namespace FightingGame.Combat.State.HFSM
 				Defense.Flat.Tick();
 				return;
 			}
-			if (c.dodge)
+			if (c.dodge && Fighter.CanDodge())
 			{
 				Defense.Flat.ChangeState(new DefenseDomainState.DodgeFlat(Fighter));
 				Defense.Flat.Tick();
@@ -401,23 +401,12 @@ namespace FightingGame.Combat.State.HFSM
 				}
 				if (tryCancel && allow && !string.IsNullOrEmpty(to))
 				{
-					Fighter.HRoot.Offense.BeginAttackFlat(to);
+					Fighter.TriggerAttack(to);
 					return;
 				}
-				if (t < s)
-				{
-					return;
-				}
-				if (t < s + a)
-				{
-					Fighter.SetAttackActive(true);
-					return;
-				}
-				if (t < s + a + r)
-				{
-					Fighter.SetAttackActive(false);
-					return;
-				}
+				if (t < s) return;
+				if (t < s + a) { Fighter.SetAttackActive(true); return; }
+				if (t < s + a + r) { Fighter.SetAttackActive(false); return; }
 				Fighter.ClearCurrentMove();
 				Fighter.HRoot.Movement.Flat.ChangeState(new MovementDomainState.IdleFlat(Fighter));
 			}
@@ -640,6 +629,13 @@ namespace FightingGame.Combat.State.HFSM
 			public override void Tick()
 			{
 				var c = Fighter.PendingCommands;
+				var cfg = Systems.RuntimeConfig.Instance;
+				if (cfg != null && c.block && Fighter.GetBlockHeldSeconds() > cfg.blockMaxHoldSeconds)
+				{
+					Fighter.gameObject.SendMessage("__LockBlockForSeconds", cfg.blockCooldownSeconds, SendMessageOptions.DontRequireReceiver);
+					Fighter.HRoot.Movement.Flat.ChangeState(new MovementDomainState.IdleFlat(Fighter));
+					return;
+				}
 				if (!c.block)
 				{
 					Fighter.HRoot.Movement.Flat.ChangeState(new MovementDomainState.IdleFlat(Fighter));
@@ -653,6 +649,7 @@ namespace FightingGame.Combat.State.HFSM
 			public override string Name => "Dodge";
 			public override void OnEnter()
 			{
+				Fighter.TryPerformDodgeTeleport(Fighter.PendingCommands.moveX);
 				Fighter.StartDodge(); t = Fighter.Stats.dodgeInvuln;
 				#if UNITY_EDITOR
 				Debug.Log("[Defense] Enter Dodge (i-frames active)");
@@ -985,7 +982,7 @@ namespace FightingGame.Combat.State.HFSM
 				g.Machine.ChangeState(c.crouch ? (HState)g.BlockCrouch : (HState)g.BlockStand);
 				return;
 			}
-			if (c.dodge)
+			if (c.dodge && Fighter.CanDodge())
 			{
 				var def = Fighter.HRoot?.Defense;
 				if (def != null)
@@ -1141,6 +1138,17 @@ namespace FightingGame.Combat.State.HFSM
 		public override void OnTick()
 		{
 			var c = Fighter.PendingCommands;
+			var cfg = Systems.RuntimeConfig.Instance;
+			if (cfg != null && c.block && Fighter.GetBlockHeldSeconds() > cfg.blockMaxHoldSeconds)
+			{
+				Fighter.gameObject.SendMessage("__LockBlockForSeconds", cfg.blockCooldownSeconds, SendMessageOptions.DontRequireReceiver);
+				var movX = Fighter.HRoot?.Movement?.Locomotion;
+				if (movX != null)
+				{
+					Fighter.HMachine.ChangeState(movX.Grounded.Idle);
+					return;
+				}
+			}
 			if (!c.block)
 			{
 				var mov = Fighter.HRoot?.Movement?.Locomotion;
@@ -1179,6 +1187,17 @@ namespace FightingGame.Combat.State.HFSM
 		public override void OnTick()
 		{
 			var c = Fighter.PendingCommands;
+			var cfg = Systems.RuntimeConfig.Instance;
+			if (cfg != null && c.block && Fighter.GetBlockHeldSeconds() > cfg.blockMaxHoldSeconds)
+			{
+				Fighter.gameObject.SendMessage("__LockBlockForSeconds", cfg.blockCooldownSeconds, SendMessageOptions.DontRequireReceiver);
+				var movX = Fighter.HRoot?.Movement?.Locomotion;
+				if (movX != null)
+				{
+					Fighter.HMachine.ChangeState(c.crouch ? (HState)movX.Grounded.Crouch : (HState)movX.Grounded.Idle);
+					return;
+				}
+			}
 			if (!c.block)
 			{
 				var mov = Fighter.HRoot?.Movement?.Locomotion;
@@ -1417,6 +1436,7 @@ namespace FightingGame.Combat.State.HFSM
 		public override void OnEnter()
 		{
 			timer = Fighter.Stats.dodgeDuration;
+			Fighter.TryPerformDodgeTeleport(Fighter.PendingCommands.moveX);
 			Fighter.StartDodge();
 		}
 		public override void OnTick()

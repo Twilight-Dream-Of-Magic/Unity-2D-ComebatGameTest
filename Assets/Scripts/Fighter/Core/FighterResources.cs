@@ -21,7 +21,8 @@ namespace Fighter.Core {
             // Broadcast initial values so UI binders render immediately
             int maxHp = fighter && fighter.stats ? fighter.stats.maxHealth : 20000;
             OnHealthChanged?.Invoke(fighter ? fighter.currentHealth : maxHp, maxHp);
-            OnMeterChanged?.Invoke(fighter ? fighter.meter : 0, fighter ? fighter.maxMeter : 2000);
+            int maxMeter = fighter && fighter.stats ? fighter.stats.maxMeter : 1000;
+            OnMeterChanged?.Invoke(fighter ? fighter.meter : 0, maxMeter);
             #if UNITY_EDITOR
             Debug.Log("[FighterResources] Broadcast initial HP/Meter to UI binders.");
             #endif
@@ -33,8 +34,10 @@ namespace Fighter.Core {
         /// </summary>
         public void IncreaseMeter(int value) {
             int before = fighter.meter;
-            fighter.meter = Mathf.Clamp(fighter.meter + value, 0, fighter.maxMeter);
-            if (fighter.meter != before) OnMeterChanged?.Invoke(fighter.meter, fighter.maxMeter);
+            int maxMeter = fighter.stats != null ? fighter.stats.maxMeter : 1000;
+            int minMeter = fighter.stats != null ? fighter.stats.minMeter : 0;
+            fighter.meter = Mathf.Clamp(fighter.meter + value, minMeter, maxMeter);
+            if (fighter.meter != before) OnMeterChanged?.Invoke(fighter.meter, maxMeter);
         }
         /// <summary>
         /// Decrease meter by value if sufficient; returns true on success.
@@ -43,7 +46,8 @@ namespace Fighter.Core {
         public bool DecreaseMeter(int value) {
             if (fighter.meter < value) return false;
             fighter.meter -= value;
-            OnMeterChanged?.Invoke(fighter.meter, fighter.maxMeter);
+            int maxMeter2 = fighter.stats != null ? fighter.stats.maxMeter : 1000;
+            OnMeterChanged?.Invoke(fighter.meter, maxMeter2);
             return true;
         }
         /// <summary>
@@ -53,7 +57,8 @@ namespace Fighter.Core {
         public void IncreaseHealth(int value) {
             int maxHp = fighter.stats != null ? fighter.stats.maxHealth : 100;
             int before = fighter.currentHealth;
-            fighter.currentHealth = Mathf.Clamp(fighter.currentHealth + value, 0, maxHp);
+            int minHp = fighter.stats != null ? fighter.stats.minHealth : 0;
+            fighter.currentHealth = Mathf.Clamp(fighter.currentHealth + value, minHp, maxHp);
             if (fighter.currentHealth != before) OnHealthChanged?.Invoke(fighter.currentHealth, maxHp);
         }
         /// <summary>

@@ -65,6 +65,10 @@ This repository contains a 1-week deliverable MVP for a 2D side-view fighting ga
        - Player: add `Input/PlayerBrain`
        - AI: add `Input/AIBrain`
    - Create `FighterStats` ScriptableObject and assign
+     - Health/Meter are data-driven via `FighterStats`:
+       - `minHealth`, `maxHealth`
+       - `minMeter`, `maxMeter`
+     - UI and gameplay read these; avoid hard-coded caps in code
    - Specials via `CommandSequenceSet`: define sequences using direction/keys (e.g. Down, Forward, Heavy -> Super). Sequences with length < 3 are ignored (ensures single-key still triggers basic attacks).
 5) Animator: set Idle/Walk/Jump/Crouch/Block/Light/Heavy/Hit/KO. Add Animation Events to attack clips to toggle hitboxes.
 6) In the battle scene, add `RoundManager` and call `UI/HUDFactory.Create(...)` (or use the `BattleAutoSetup` to auto-build the scene). Link returned references to `RoundManager` (`p1`, `p2`, `p1Hp`, `p2Hp`, `timerText`).
@@ -119,6 +123,7 @@ MIT
 - 代码风格
   - 缩进 4 空格；Allman 花括号；一行一条语句；避免魔法数字（用 ScriptableObject 配置）
   - var 仅在类型显而易见时使用；每个 .cs 文件一个公开类型，文件名与类型同名
+  - 生命与气槽上下限均由 `FighterStats` 控制，勿在代码中硬编码默认值
 - Unity 约定
   - 组件获取在 Awake/Start 缓存；避免在 Update 里频繁 GetComponent/Find
   - 物理逻辑在 FixedUpdate；渲染/相机在 LateUpdate；按需乘 Time.deltaTime
