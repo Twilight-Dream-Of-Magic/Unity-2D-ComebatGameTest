@@ -163,12 +163,12 @@ namespace FightingGame.Combat.State.HFSM
 				}
 				if (pendingCommands.light)
 				{
-					Fighter.HRoot.Movement.Flat.ChangeState(new AttackLightFlat(Fighter));
+					Fighter.EnterAttackHFSM("Light");
 					return;
 				}
 				if (pendingCommands.heavy)
 				{
-					Fighter.HRoot.Movement.Flat.ChangeState(new AttackHeavyFlat(Fighter));
+					Fighter.EnterAttackHFSM("Heavy");
 					return;
 				}
 			}
@@ -195,12 +195,12 @@ namespace FightingGame.Combat.State.HFSM
 				// check attack transitions after movement handling
 				if (pendingCommands.light)
 				{
-					Fighter.HRoot.Movement.Flat.ChangeState(new AttackLightFlat(Fighter));
+					Fighter.EnterAttackHFSM("Light");
 					return;
 				}
 				if (pendingCommands.heavy)
 				{
-					Fighter.HRoot.Movement.Flat.ChangeState(new AttackHeavyFlat(Fighter));
+					Fighter.EnterAttackHFSM("Heavy");
 					return;
 				}
 			}
@@ -234,100 +234,17 @@ namespace FightingGame.Combat.State.HFSM
 				}
 				if (pendingCommands.light)
 				{
-					Fighter.HRoot.Movement.Flat.ChangeState(new AttackLightFlat(Fighter));
+					Fighter.EnterAttackHFSM("Light");
 					return;
 				}
 				if (pendingCommands.heavy)
 				{
-					Fighter.HRoot.Movement.Flat.ChangeState(new AttackHeavyFlat(Fighter));
+					Fighter.EnterAttackHFSM("Heavy");
 					return;
 				}
 			}
 		}
 
-		/// <summary>
-		/// Light attack flat: handles startup/active/recovery using move data when available.
-		/// 轻攻击子态：根据 action data（若存在）处理起始/有效/恢复阶段。
-		/// </summary>
-		public class AttackLightFlat : FightingGame.Combat.State.FSMState
-		{
-			private float elapsedSeconds;
-			private float startupSeconds, activeSeconds, recoverySeconds;
-
-			public AttackLightFlat(FightingGame.Combat.Actors.FighterActor actor) : base(actor) { }
-			public override string Name => "Attack-Light";
-			public override void OnEnter()
-			{
-				Data.CombatActionDefinition actionData = Fighter.actionSet != null ? Fighter.actionSet.Get("Light") : null;
-				startupSeconds = actionData != null ? actionData.startup : DefaultLightStartup;
-				activeSeconds = actionData != null ? actionData.active : DefaultLightActive;
-				recoverySeconds = actionData != null ? actionData.recovery : DefaultLightRecovery;
-				elapsedSeconds = 0f;
-				Fighter.TriggerAttack("Light"); // keep animator/trigger string unchanged
-			}
-			public override void Tick()
-			{
-				elapsedSeconds += Time.deltaTime;
-				if (elapsedSeconds < startupSeconds)
-				{
-					return;
-				}
-				if (elapsedSeconds < startupSeconds + activeSeconds)
-				{
-					Fighter.SetAttackActive(true);
-					return;
-				}
-				if (elapsedSeconds < startupSeconds + activeSeconds + recoverySeconds)
-				{
-					Fighter.SetAttackActive(false);
-					return;
-				}
-				Fighter.ClearCurrentMove();
-				Fighter.HRoot.Movement.Flat.ChangeState(new IdleFlat(Fighter));
-			}
-		}
-
-		/// <summary>
-		/// Heavy attack flat: similar to light but with different default timings.
-		/// 重攻击子态：与轻攻击类似，但默认时间参数不同。
-		/// </summary>
-		public class AttackHeavyFlat : FightingGame.Combat.State.FSMState
-		{
-			private float elapsedSeconds;
-			private float startupSeconds, activeSeconds, recoverySeconds;
-
-			public AttackHeavyFlat(FightingGame.Combat.Actors.FighterActor actor) : base(actor) { }
-			public override string Name => "Attack-Heavy";
-			public override void OnEnter()
-			{
-				Data.CombatActionDefinition actionData = Fighter.actionSet != null ? Fighter.actionSet.Get("Heavy") : null;
-				startupSeconds = actionData != null ? actionData.startup : DefaultHeavyStartup;
-				activeSeconds = actionData != null ? actionData.active : DefaultHeavyActive;
-				recoverySeconds = actionData != null ? actionData.recovery : DefaultHeavyRecovery;
-				elapsedSeconds = 0f;
-				Fighter.TriggerAttack("Heavy");
-			}
-			public override void Tick()
-			{
-				elapsedSeconds += Time.deltaTime;
-				if (elapsedSeconds < startupSeconds)
-				{
-					return;
-				}
-				if (elapsedSeconds < startupSeconds + activeSeconds)
-				{
-					Fighter.SetAttackActive(true);
-					return;
-				}
-				if (elapsedSeconds < startupSeconds + activeSeconds + recoverySeconds)
-				{
-					Fighter.SetAttackActive(false);
-					return;
-				}
-				Fighter.ClearCurrentMove();
-				Fighter.HRoot.Movement.Flat.ChangeState(new IdleFlat(Fighter));
-			}
-		}
 
 		/// <summary>
 		/// Constructs the MovementDomainState with a Locomotion substate and initializes the embedded flat FSM.
