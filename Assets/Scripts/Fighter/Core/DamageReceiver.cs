@@ -140,11 +140,21 @@ namespace Fighter.Core
 					if (damageInfo.knockdownKind != KnockdownKind.None)
 					{
 						bool isHardKnockdown = damageInfo.knockdownKind == KnockdownKind.Hard;
-						defense.BeginDownedFlat(isHardKnockdown, damageInfo.hitstun);
+						var downedState = defense.Downed;
+						if (downedState != null)
+						{
+							downedState.Begin(isHardKnockdown, damageInfo.hitstun);
+							fighter.HMachine.ChangeState(downedState);
+						}
 					}
 					else
 					{
-						defense.BeginHitstunFlat(damageInfo.hitstun);
+						var hitstunState = defense.Hitstun;
+						if (hitstunState != null)
+						{
+							hitstunState.Begin(damageInfo.hitstun);
+							fighter.HMachine.ChangeState(hitstunState);
+						}
 					}
 				}
 			}
@@ -181,7 +191,7 @@ namespace Fighter.Core
 				if (defense != null)
 				{
 					bool isCrouchingGuard = fighter.IsCrouching || fighter.PendingCommands.crouch;
-					defense.Flat.ChangeState(new FightingGame.Combat.State.HFSM.DefenseDomainState.BlockFlat(fighter, isCrouchingGuard));
+					fighter.HMachine.ChangeState(isCrouchingGuard ? (FightingGame.Combat.State.HFSM.HState)defense.BlockCrouch : (FightingGame.Combat.State.HFSM.HState)defense.BlockStand);
 				}
 			}
 
