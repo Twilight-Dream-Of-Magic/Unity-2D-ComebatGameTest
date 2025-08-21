@@ -83,11 +83,11 @@ namespace Dev
 			light.damage = 8;
 			light.hitstun = 0.12f;
 			light.blockstun = 0.08f;
-			light.hitstopOnHit = 0.06f;
-			light.hitstopOnBlock = 0.04f;
-			light.knockback = new Vector2(2.2f, 1.8f);
-			light.pushbackOnHit = 0.35f;
-			light.pushbackOnBlock = 0.5f;
+			light.hitstopOnHit = 0.04f;
+			light.hitstopOnBlock = 0.03f;
+			light.knockback = new Vector2(0.85f, 0.35f);
+			light.pushbackOnHit = 0.22f;
+			light.pushbackOnBlock = 0.35f;
 			light.meterOnHit = 50;
 			light.meterOnBlock = 20;
 			light.canCancelOnHit = true;
@@ -97,6 +97,7 @@ namespace Dev
 			light.onHitCancelWindow = new Vector2(0.0f, 0.25f);
 			light.onBlockCancelWindow = new Vector2(0.0f, 0.18f);
 			light.cancelIntoTriggers = new[] { "Light", "Heavy", "Super" };
+			light.knockdownKind = FightingGame.Combat.KnockdownKind.None;
 
 			var heavy = ScriptableObject.CreateInstance<Data.CombatActionDefinition>();
 			heavy.nameId = "Heavy";
@@ -107,16 +108,16 @@ namespace Dev
 			heavy.damage = 18;
 			heavy.hitstun = 0.2f;
 			heavy.blockstun = 0.12f;
-			heavy.hitstopOnHit = 0.1f;
-			heavy.hitstopOnBlock = 0.06f;
-			heavy.knockback = new Vector2(3.2f, 2.2f);
-			heavy.pushbackOnHit = 0.9f;
-			heavy.pushbackOnBlock = 1.0f;
+			heavy.hitstopOnHit = 0.06f;
+			heavy.hitstopOnBlock = 0.04f;
+			heavy.knockback = new Vector2(1.25f, 0.6f);
+			heavy.pushbackOnHit = 0.35f;
+			heavy.pushbackOnBlock = 0.6f;
 			heavy.meterOnHit = 90;
 			heavy.meterOnBlock = 40;
 			heavy.canCancelOnHit = true;
 			heavy.canCancelOnBlock = false;
-			heavy.knockdownKind = FightingGame.Combat.KnockdownKind.Soft;
+			heavy.knockdownKind = FightingGame.Combat.KnockdownKind.None;
 			heavy.cancelIntoTriggers = new[] { "Super" };
 
 			var combatActionSet = ScriptableObject.CreateInstance<Data.CombatActionSet>();

@@ -19,9 +19,9 @@ namespace Systems {
 		public float smooth = 6f;
 		[Header("Advanced Follow")]
 		public bool useMidpoint = true;
-		public float smoothX = 8f;
-		public float smoothY = 6f;
-		public float yDeadband = 0.08f;
+		public float smoothX = 14f; // 更快的X收敛，避免“顺移”感
+		public float smoothY = 10f; // 稍快的Y收敛
+		public float yDeadband = 0.06f; // 更小死区，提升贴合度但仍抑制抖动
 		public float xClampMargin = 2.5f;
 		public float yClampMargin = 1.0f;
 
